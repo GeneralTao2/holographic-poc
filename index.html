@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Holographic Foil — Mob Psycho ??% Effect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Zen+Dots&display=swap" rel="stylesheet" />
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #05060a; font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; }
+  #gl { display: block; width: 100vw; height: 100vh; }
+
+  /* Control panel */
+  #panel {
+    position: fixed; top: 14px; right: 14px; width: 250px;
+    max-height: calc(100vh - 28px); overflow-y: auto;
+    background: rgba(10,12,20,0.72); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+    padding: 14px 14px 10px; color: #dfe4f0; font-size: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5); transition: transform .25s ease, opacity .25s ease;
+  }
+  #panel::-webkit-scrollbar { width: 8px; }
+  #panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
+  #panel.hidden { transform: translateX(300px); opacity: 0; }
+  #panel h1 { font-size: 12px; margin: 0 0 10px; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.8; }
+  #panel .sub { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.5; margin: 12px 0 8px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
+  .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .row .top { display: flex; justify-content: space-between; align-items: baseline; }
+  .row label { opacity: 0.8; }
+  .row output { font-variant-numeric: tabular-nums; opacity: 0.7; }
+  input[type=range] { width: 100%; accent-color: #7ad0ff; }
+  .num { width: 74px; background:#11131d; color:#dfe4f0; border:1px solid rgba(255,255,255,.15); border-radius:5px; padding:2px 5px; font-family:inherit; font-size:11px; text-align:right; -moz-appearance:textfield; }
+  .num::-webkit-outer-spin-button, .num::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .note { font-size:10px; opacity:.5; margin:0 0 10px; line-height:1.45; }
+  .fp { border-top:1px solid rgba(255,255,255,.07); padding-top:8px; margin-bottom:8px; }
+  .fp .phead { display:flex; justify-content:space-between; align-items:center; }
+  .fp .phead > label { opacity:.9; }
+  .fp .ctl { margin-top:6px; }
+  .fp .ctl .top { display:flex; justify-content:space-between; align-items:baseline; }
+  .fp .tag { font-size:9px; letter-spacing:.12em; text-transform:uppercase; opacity:.5; }
+  .fp .ctl[data-which="bg"]  .tag { color:#7ad0ff; opacity:.85; }
+  .fp .ctl[data-which="btn"] .tag { color:#ffce7a; opacity:.85; }
+  .row .chk { display: inline-flex; align-items: center; gap: 6px; opacity: 0.9; cursor: pointer; margin-right: 12px; }
+  .row .chk input { accent-color: #7ad0ff; cursor: pointer; }
+  select { width: 100%; background:#11131d; color:#dfe4f0; border:1px solid rgba(255,255,255,.15); border-radius:6px; padding:4px; }
+  .btns { display:flex; gap:8px; margin-top:6px; }
+  button { flex:1; cursor:pointer; background:#1a1e2c; color:#dfe4f0; border:1px solid rgba(255,255,255,.15); border-radius:6px; padding:6px; font-family:inherit; font-size:11px; }
+  button:hover { background:#242a3d; }
+  /* Center holographic button (classic rectangle) */
+  #foilBtn {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 260px; height: 94px; border-radius: 8px;
+    background: transparent; border: 1px solid rgba(255,255,255,0.28);
+    color: #fff; cursor: pointer; z-index: 3; padding: 0 14px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 rgba(120,200,255,0);
+    transition: box-shadow .3s ease, border-color .3s ease, transform .12s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #foilBtn:hover {
+    border-color: rgba(190,235,255,0.95);
+    box-shadow: 0 0 50px rgba(120,200,255,0.45);
+  }
+  #foilBtn:active { transform: translate(-50%,-50%) scale(0.97); }
+
+  /* ---- Crystal-foil label: Zen Dots, carved holographic + refraction ---- */
+  #foilBtn.mode-crystal {
+    font-family: "Zen Dots", "Bahnschrift", "Oswald", "Impact", system-ui, sans-serif;
+    font-size: 18px; letter-spacing: 0.02em; font-weight: 400; text-transform: none;
+  }
+  #foilBtn.mode-crystal span {
+    display: block; pointer-events: none; text-align: center; line-height: 1.15;
+    color: transparent;
+    background-image: linear-gradient(100deg,
+      #ffffff 0%, #a9ecff 16%, #ffc7ef 32%, #c6ffd6 50%, #fff0ad 66%, #cfe0ff 84%, #ffffff 100%);
+    background-size: 280% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: foilShift 7s linear infinite;
+    filter:
+      drop-shadow(0 0 2px rgba(0,0,0,0.6))              /* uniform shadow, no offset */
+      drop-shadow(0 0 6px rgba(0,0,0,0.45))             /* uniform soft halo */
+      drop-shadow(1.1px 0 0.6px rgba(255,40,120,0.38))  /* red refraction fringe */
+      drop-shadow(-1.1px 0 0.6px rgba(40,190,255,0.38));/* cyan refraction fringe */
+  }
+
+  /* ---- Initial label: original monospace, spaced, overlay blend ---- */
+  #foilBtn.mode-initial {
+    font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 15px; letter-spacing: 0.32em; font-weight: 700; text-transform: uppercase;
+  }
+  #foilBtn.mode-initial span {
+    display: block; pointer-events: none; text-align: center; line-height: 1.25;
+    color: #fff; mix-blend-mode: overlay; opacity: 0.92;
+    text-shadow: 0 0 14px rgba(0,0,0,0.6);
+  }
+  @keyframes foilShift { from { background-position: 0% 50%; } to { background-position: 280% 50%; } }
+
+  #toggle {
+    position: fixed; top: 14px; right: 14px; z-index: 5; width: 34px; height: 34px;
+    display: none; align-items:center; justify-content:center; cursor:pointer;
+    background: rgba(10,12,20,0.72); border:1px solid rgba(255,255,255,.15); border-radius:8px; color:#dfe4f0;
+  }
+  #panel.hidden ~ #toggle { display: flex; }
+  .hint { opacity:0.45; font-size:10px; margin-top:4px; }
+</style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <button id="foilBtn" class="mode-crystal"><span>Sign in with Google</span></button>
+
+  <div id="panel">
+    <h1>Holographic Foil</h1>
+
+    <p class="note">Each setting has Global · BG · Button. Untick “global” to tune the page background and the button separately.</p>
+    <div id="foilParams"></div>
+
+    <div class="sub">Scene shading</div>
+
+    <div class="row">
+      <div class="top"><label>Side shadows</label></div>
+      <label class="chk"><input type="checkbox" id="sideLR" checked /> Left / Right</label>
+      <label class="chk"><input type="checkbox" id="sideTB" /> Top / Bottom</label>
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Shadow length L/R</label><output id="oLenX">0.255</output></div>
+      <input id="lenX" type="range" min="0" max="0.5" step="0.005" value="0.255" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Shadow length T/B</label><output id="oLenY">0.080</output></div>
+      <input id="lenY" type="range" min="0" max="0.5" step="0.005" value="0.08" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Center darkness</label><output id="oCenter">1.00</output></div>
+      <input id="center" type="range" min="0" max="1" step="0.01" value="1.00" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Shade step</label><output id="oStep">0.06</output></div>
+      <input id="shadeStep" type="range" min="0.01" max="0.45" step="0.005" value="0.06" />
+    </div>
+
+    <div class="sub">Center button</div>
+
+    <div class="row">
+      <div class="top"><label>Label style</label></div>
+      <select id="btnStyle">
+        <option value="crystal">Crystal foil (Zen Dots)</option>
+        <option value="initial">Initial (mono overlay)</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Button width</label><output id="oBtnSize">260</output></div>
+      <input id="btnSize" type="range" min="120" max="520" step="1" value="260" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Btn hover → rotation</label><output id="oBtnRot">1.12</output></div>
+      <input id="btnRot" type="range" min="0" max="5" step="0.01" value="1.12" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Btn hover → color flow</label><output id="oBtnCol">0.63</output></div>
+      <input id="btnCol" type="range" min="0" max="5" step="0.01" value="0.63" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Btn hover → spread</label><output id="oBtnSpr">1.00</output></div>
+      <input id="btnSpr" type="range" min="0" max="5" step="0.01" value="1.00" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Btn hover → saturation</label><output id="oBtnSat">0.21</output></div>
+      <input id="btnSat" type="range" min="0" max="2" step="0.01" value="0.21" />
+    </div>
+
+    <div class="sub">Mouse interaction</div>
+
+    <div class="row">
+      <div class="top"><label>Hover → rotation</label><output id="oHoverRot">0.00</output></div>
+      <input id="hoverRot" type="range" min="0" max="2" step="0.01" value="0.00" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Hover → color flow</label><output id="oHoverCol">0.00</output></div>
+      <input id="hoverCol" type="range" min="0" max="2" step="0.01" value="0.00" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Hover → spread</label><output id="oHoverSpr">0.00</output></div>
+      <input id="hoverSpr" type="range" min="0" max="2" step="0.01" value="0.00" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Hover → saturation</label><output id="oHoverSat">0.54</output></div>
+      <input id="hoverSat" type="range" min="0" max="2" step="0.01" value="0.54" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Hover inner radius</label><output id="oHoverInner">0</output></div>
+      <input id="hoverInner" type="range" min="0" max="600" step="1" value="0" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Hover outer radius</label><output id="oHoverOuter">202</output></div>
+      <input id="hoverOuter" type="range" min="1" max="900" step="1" value="202" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Falloff curve</label></div>
+      <select id="hoverCurve">
+        <option value="0" selected>Linear</option>
+        <option value="1">Smoothstep</option>
+        <option value="2">Ease-in</option>
+        <option value="3">Ease-out</option>
+        <option value="4">Sharp</option>
+      </select>
+    </div>
+
+    <div class="btns">
+      <button id="pause">Pause</button>
+      <button id="hidePanel">Hide UI</button>
+    </div>
+    <div class="btns">
+      <button id="resetAll">Reset all</button>
+      <button id="copyCfg">Copy config</button>
+    </div>
+    <div class="hint">Double-click a value or slider to reset it · H: toggle UI · Space: pause</div>
+  </div>
+  <div id="toggle" title="Show controls">⚙</div>
+
+  <script src="round-image.js"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    const canvas = document.getElementById("gl");
+    const gl = canvas.getContext("webgl2", { antialias: true, premultipliedAlpha: false });
+    if (!gl) {
+      document.body.innerHTML = '<p style="color:#fff;padding:40px;font-family:sans-serif">WebGL2 is not available in this browser.</p>';
+      return;
+    }
+
+    // ---------- Shaders ----------
+    const VERT = `#version 300 es
+    in vec2 aPos;
+    void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+    const FRAG = `#version 300 es
+    precision highp float;
+    out vec4 fragColor;
+
+    uniform vec2  uRes;
+    uniform float uTime;
+    uniform sampler2D uTex;
+
+    uniform float uScaleBg;   uniform float uScaleBtn;    // scale radius (px)
+    uniform float uOverlapBg; uniform float uOverlapBtn;  // row spacing factor (< 1 = more overlap)
+    uniform float uSpreadBg;  uniform float uSpreadBtn;   // palette luminance spread
+    uniform float uSatBg;     uniform float uSatBtn;      // saturation
+    uniform int   uPaletteBg; uniform int   uPaletteBtn;  // palette index
+    uniform vec2  uMousePx;   // cursor position (device px, y up)
+    uniform float uMouseAct;  // 0..1 pointer is over the scene
+    uniform float uHoverRot;  // hover boost: rotation speed
+    uniform float uHoverCol;  // hover boost: color flow speed
+    uniform float uHoverSpr;  // hover boost: color spread
+    uniform float uHoverSat;  // hover boost: saturation
+    uniform float uHoverInner;// full-effect radius (px)
+    uniform float uHoverOuter;// zero-effect radius (px)
+    uniform int   uHoverCurve;// falloff curve select
+    uniform float uRotPhase;  // accumulated base rotation phase
+    uniform float uColPhase;  // accumulated base color phase
+    uniform float uHovRotPhase;// accumulated hover rotation phase
+    uniform float uHovColPhase;// accumulated hover color phase
+    uniform float uBtnRotPhase;// accumulated button rotation phase
+    uniform float uBtnColPhase;// accumulated button color phase
+    uniform float uLenX;      // left/right shadow length (fraction of width)
+    uniform float uLenY;      // top/bottom shadow length (fraction of height)
+    uniform float uSideLR;    // enable left/right shadows (0/1)
+    uniform float uSideTB;    // enable top/bottom shadows (0/1)
+    uniform float uCenterDark;// center darkening
+    uniform float uShadeStep; // dark-to-effect transition width (0..0.5)
+    uniform vec2  uBtnPx;     // button center (device px)
+    uniform vec2  uBtnSize;   // button width/height (device px)
+    uniform float uBtnHover;  // 0..1 hover on button
+    uniform float uBtnRot;    // button hover boost: rotation speed
+    uniform float uBtnCol;    // button hover boost: color flow speed
+    uniform float uBtnSpr;    // button hover boost: color spread
+    uniform float uBtnSat;    // button hover boost: saturation
+
+    const float PI = 3.14159265359;
+
+    vec2 rot(vec2 p, float a){ float s=sin(a), c=cos(a); return mat2(c,-s,s,c)*p; }
+
+    // Inigo Quilez cosine palette
+    vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d){
+      return a + b*cos(6.28318*(c*t + d));
+    }
+
+    vec3 colorama(float lum, float phase, float spread, float sat, int palette){
+      float t = lum*spread + phase;
+      vec3 col;
+      if(palette==0){        // rainbow foil
+        col = pal(t, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0,0.33,0.67));
+      } else if(palette==1){ // oil slick
+        col = pal(t, vec3(0.5,0.5,0.55), vec3(0.5), vec3(1.0,1.0,1.0), vec3(0.0,0.15,0.35));
+      } else if(palette==2){ // psychic aura (teal/violet)
+        col = pal(t, vec3(0.5,0.4,0.6), vec3(0.5,0.5,0.5), vec3(1.0,0.8,1.0), vec3(0.30,0.20,0.55));
+      } else {                // gold / magenta
+        col = pal(t, vec3(0.6,0.4,0.4), vec3(0.4,0.3,0.4), vec3(1.0,1.0,0.6), vec3(0.10,0.35,0.60));
+      }
+      float g = dot(col, vec3(0.299,0.587,0.114));
+      return mix(vec3(g), col, sat);
+    }
+
+    // deterministic pseudo random from cell id
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+
+    // fish-scale holographic foil sampled at pixel uv (device px), disc radius R, over bg
+    vec3 foil(vec2 uv, float R, float rotPhase, float colPhase, float spread, float sat, float overlap, int palette, vec3 bg){
+      float rowH = R * overlap;       // vertical spacing -> overlap
+      float colW = R * 0.92;          // horizontal spacing
+      vec3 col = bg;
+      float baseRow = floor(uv.y / rowH);
+      for(float dr = -1.0; dr <= 2.0; dr += 1.0){
+        float row = baseRow + dr;
+        float stagger = mod(row, 2.0) * 0.5 * colW;
+        float cy = row * rowH + rowH * 0.5;
+        float baseCol = floor((uv.x - stagger) / colW);
+        for(float dc = -1.0; dc <= 1.0; dc += 1.0){
+          float cc = baseCol + dc;
+          float cx = cc * colW + stagger + colW * 0.5;
+          vec2 p = uv - vec2(cx, cy);
+          if(length(p) > R) continue;
+
+          float id = hash(vec2(row, cc));
+          float spin = (id - 0.5) * 2.0;
+          float ang  = id * 6.2831 + rotPhase * (0.4 + spin);
+          vec2 pr = rot(p, ang);
+
+          vec2 tuv = pr / (2.0 * R) + 0.5;
+          vec4 tex = texture(uTex, tuv);
+
+          float d = length(p) / R;
+          float edge = smoothstep(1.0, 0.90, d);
+          float alpha = edge * max(tex.a, step(0.02, tex.r));
+          if(alpha < 0.003) continue;
+
+          float lum = dot(tex.rgb, vec3(0.299,0.587,0.114));
+          float phase = colPhase + id * 1.7 + d * 0.15;
+          vec3 c = colorama(lum, phase, spread, sat, palette);
+          c += pow(lum, 6.0) * 0.6;         // metallic sheen
+          col = mix(col, c, alpha);
+        }
+      }
+      return col;
+    }
+
+    void main(){
+      vec2 uv = gl_FragCoord.xy;
+
+      // ---- cursor proximity (inner = full, outer = zero) with selectable falloff curve ----
+      float dist = length(gl_FragCoord.xy - uMousePx);
+      float f = 1.0 - clamp((dist - uHoverInner) / max(uHoverOuter - uHoverInner, 1.0), 0.0, 1.0);
+      if(uHoverCurve == 1)      f = f * f * (3.0 - 2.0 * f);       // smoothstep
+      else if(uHoverCurve == 2) f = f * f;                         // ease-in
+      else if(uHoverCurve == 3) f = 1.0 - (1.0 - f) * (1.0 - f);   // ease-out
+      else if(uHoverCurve == 4) f = pow(f, 0.4);                   // sharp
+      float prox = f * uMouseAct;
+
+      float sprE = uSpreadBg * (1.0 + prox * uHoverSpr);
+      float satE = uSatBg    + prox * uHoverSat;   // additive so it stays visible at any base
+
+      // ---- background foil (continuous accumulated phases -> no speed-change jumps) ----
+      vec3 col = foil(uv, uScaleBg,
+                      uRotPhase + prox * uHovRotPhase,
+                      uColPhase + prox * uHovColPhase,
+                      sprE, satE, uOverlapBg, uPaletteBg, vec3(0.04,0.045,0.06));
+
+      // ---- side shadows: 100% black bands, length-controlled, toggleable per axis ----
+      float st = max(uShadeStep, 0.001);
+      float fx = gl_FragCoord.x / uRes.x;
+      float fy = gl_FragCoord.y / uRes.y;
+      float sh = 1.0;
+      if(uSideLR > 0.5){
+        sh *= smoothstep(uLenX, uLenX + st, fx);              // left band
+        sh *= smoothstep(1.0 - uLenX, 1.0 - uLenX - st, fx);  // right band
+      }
+      if(uSideTB > 0.5){
+        sh *= smoothstep(uLenY, uLenY + st, fy);              // bottom band
+        sh *= smoothstep(1.0 - uLenY, 1.0 - uLenY - st, fy);  // top band
+      }
+      col *= sh;
+
+      // center dark rectangle that contains the button (foil still shows above/below + at sides)
+      float stepPx = uRes.y * st;
+      vec2  cpb    = abs(gl_FragCoord.xy - uBtnPx);
+      vec2  dh     = uBtnSize * 0.5 + stepPx;              // dark rect half-size (button + margin)
+      float outb   = max(cpb.x - dh.x, cpb.y - dh.y);      // < 0 inside the rectangle
+      float dcen   = smoothstep(0.0, stepPx, outb);        // 0 inside (dark) -> 1 outside
+      col *= mix(1.0, dcen, uCenterDark);
+
+      // ---- center rectangular button: solid black rectangle, ~10 scales, composed hover ----
+      vec2 bp   = gl_FragCoord.xy - uBtnPx;
+      vec2 hsz  = uBtnSize * 0.5;
+      vec2 ins  = step(abs(bp), hsz);
+      if(ins.x * ins.y > 0.5){
+        float bspr = uSpreadBtn * (1.0 + uBtnHover * uBtnSpr);
+        float bsat = uSatBtn    + uBtnHover * uBtnSat;
+        vec3 bcol  = foil(gl_FragCoord.xy, uScaleBtn, uBtnRotPhase, uBtnColPhase, bspr, bsat, uOverlapBtn, uPaletteBtn, vec3(0.0));
+        float ed   = min(hsz.x - abs(bp.x), hsz.y - abs(bp.y)); // px from nearest edge
+        float border = 1.0 - smoothstep(1.0, 3.0, ed);
+        bcol += border * (0.15 + 0.85 * uBtnHover) * vec3(0.75, 0.9, 1.0);
+        col = bcol;
+      }
+
+      fragColor = vec4(col, 1.0);
+    }`;
+
+    function compile(type, src) {
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(sh));
+        throw new Error("Shader compile error");
+      }
+      return sh;
+    }
+
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(prog));
+      throw new Error("Program link error");
+    }
+    gl.useProgram(prog);
+
+    // fullscreen triangle
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    // uniforms
+    const U = {};
+    ["uRes","uTime","uTex","uScaleBg","uScaleBtn","uOverlapBg","uOverlapBtn","uSpreadBg","uSpreadBtn","uSatBg","uSatBtn","uPaletteBg","uPaletteBtn",
+     "uMousePx","uMouseAct","uHoverRot","uHoverCol","uHoverSpr","uHoverSat","uHoverInner","uHoverOuter","uHoverCurve","uRotPhase","uColPhase","uHovRotPhase","uHovColPhase","uBtnRotPhase","uBtnColPhase","uLenX","uLenY","uSideLR","uSideTB","uCenterDark","uShadeStep","uBtnPx","uBtnSize","uBtnHover","uBtnRot","uBtnCol","uBtnSpr","uBtnSat"]
+      .forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+    // texture
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128,128,128,255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const img = new Image();
+    img.onload = () => {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.generateMipmap(gl.TEXTURE_2D);
+    };
+    img.src = (typeof ROUND_IMAGE !== "undefined") ? ROUND_IMAGE : "round.png";
+
+    // ---------- State / controls ----------
+    const BTN_ASPECT = 0.36;   // button height = width * aspect
+    const state = {
+      paused: false,
+      lenX: 0.255, lenY: 0.08, sideLR: true, sideTB: false,
+      centerDark: 1.0, shadeStep: 0.06,
+      btnSize: 260, btnRot: 1.12, btnCol: 0.63, btnSpr: 1.00, btnSat: 0.21,
+      hoverRot: 0.0, hoverCol: 0.0, hoverSpr: 0.0, hoverSat: 0.54,
+      hoverInner: 0, hoverOuter: 202, hoverCurve: 0,
+      foil: {},   // per-side foil params, populated by the generator below
+      // interaction targets (smoothed in the loop)
+      mpxT: 0, mpyT: 0, mouseActT: 0, btnHoverT: 0, btnPulse: 0
+    };
+
+    const DEFAULTS = {};
+    const REGISTRY = [];
+    function fmtNum(v){ return (Math.abs(v) >= 1 || v === 0) ? String(+v.toFixed(3)) : String(+v.toFixed(5)); }
+    function resetOne(key){
+      const r = REGISTRY.find(x => x.key === key);
+      if(!r) return;
+      r.el.value = DEFAULTS[key];
+      r.el.dispatchEvent(new Event("input"));   // re-runs apply (updates state, number box, onChange)
+    }
+    function bind(id, key, outId, _fmt, onChange) {
+      const el = document.getElementById(id);
+      DEFAULTS[key] = parseFloat(el.value);
+      let num = null;
+      if (outId) {
+        const out = document.getElementById(outId);
+        num = document.createElement("input");
+        num.type = "number"; num.className = "num"; num.id = outId; num.step = "any";
+        out.replaceWith(num);
+        num.addEventListener("input", () => {
+          const v = parseFloat(num.value);
+          if (!isNaN(v)) { state[key] = v; el.value = v; if (onChange) onChange(); }
+        });
+        num.addEventListener("dblclick", () => resetOne(key));
+      }
+      const apply = () => { state[key] = parseFloat(el.value); if (num) num.value = fmtNum(state[key]); if (onChange) onChange(); };
+      el.addEventListener("input", apply);
+      el.addEventListener("dblclick", () => resetOne(key));
+      REGISTRY.push({ key, el, num });
+      apply();
+    }
+    // ---- per-side foil params: Global / BG / Button (global overrides children when ticked) ----
+    const FOIL_PARAMS = [
+      { key:"scale",   label:"Scale size",       min:20,   max:260, step:1,    def:40,   dbg:40,   dbtn:66,   dov:false },
+      { key:"overlap", label:"Overlap",          min:0.35, max:0.9, step:0.01, def:0.60, dbg:0.78, dbtn:0.60, dov:false },
+      { key:"rot",     label:"Rotation speed",   min:0,    max:3,   step:0.01, def:0.60 },
+      { key:"color",   label:"Color flow speed", min:0,    max:2,   step:0.01, def:0.35 },
+      { key:"spread",  label:"Color spread",     min:0.2,  max:3,   step:0.01, def:1.30 },
+      { key:"sat",     label:"Saturation",       min:0,    max:1.6, step:0.01, def:0.22, dbg:0.40, dbtn:0.40 },
+      { key:"palette", label:"Palette", type:"select", def:0, options:["Rainbow foil","Oil slick","Psychic aura","Gold / magenta"] }
+    ];
+    const FOIL_REGISTRY = [];
+    (function buildFoilParams(){
+      const host = document.getElementById("foilParams");
+      const WHICH = [["g","Global"],["bg","BG"],["btn","Button"]];
+      FOIL_PARAMS.forEach(P => {
+        const dg   = P.def;
+        const dbg  = (P.dbg  !== undefined) ? P.dbg  : P.def;
+        const dbtn = (P.dbtn !== undefined) ? P.dbtn : P.def;
+        const dov  = (P.dov  !== undefined) ? P.dov  : true;
+        const def = { override:dov, g:dg, bg:dbg, btn:dbtn };
+        state.foil[P.key] = { override:dov, g:dg, bg:dbg, btn:dbtn };
+
+        const wrap = document.createElement("div"); wrap.className = "fp";
+        const head = document.createElement("div"); head.className = "phead";
+        const lab = document.createElement("label"); lab.textContent = P.label; head.appendChild(lab);
+        const ovrLbl = document.createElement("label"); ovrLbl.className = "chk";
+        const ovr = document.createElement("input"); ovr.type = "checkbox"; ovr.checked = dov;
+        ovrLbl.appendChild(ovr); ovrLbl.appendChild(document.createTextNode(" global"));
+        head.appendChild(ovrLbl); wrap.appendChild(head);
+
+        const ctls = {};
+        WHICH.forEach(([which, tag]) => {
+          const ctl = document.createElement("div"); ctl.className = "ctl"; ctl.dataset.which = which;
+          const val = state.foil[P.key][which];
+          if(P.type === "select"){
+            const top = document.createElement("div"); top.className = "top";
+            const ts = document.createElement("span"); ts.className = "tag"; ts.textContent = tag; top.appendChild(ts);
+            ctl.appendChild(top);
+            const sel = document.createElement("select");
+            P.options.forEach((o,i) => { const op = document.createElement("option"); op.value = i; op.textContent = o; sel.appendChild(op); });
+            sel.value = String(val);
+            sel.addEventListener("change", () => state.foil[P.key][which] = parseInt(sel.value,10));
+            ctl.appendChild(sel);
+            ctls[which] = { el: ctl, set: v => { sel.value = String(v); } };
+          } else {
+            const top = document.createElement("div"); top.className = "top";
+            const ts = document.createElement("span"); ts.className = "tag"; ts.textContent = tag;
+            const num = document.createElement("input"); num.type = "number"; num.className = "num"; num.step = "any"; num.value = fmtNum(val);
+            top.appendChild(ts); top.appendChild(num); ctl.appendChild(top);
+            const rng = document.createElement("input"); rng.type = "range"; rng.min = P.min; rng.max = P.max; rng.step = P.step; rng.value = val;
+            ctl.appendChild(rng);
+            const set = v => { state.foil[P.key][which] = v; rng.value = v; num.value = fmtNum(v); };
+            rng.addEventListener("input", () => { state.foil[P.key][which] = parseFloat(rng.value); num.value = fmtNum(state.foil[P.key][which]); });
+            num.addEventListener("input", () => { const v = parseFloat(num.value); if(!isNaN(v)){ state.foil[P.key][which] = v; rng.value = v; } });
+            const reset = () => set(def[which]);
+            rng.addEventListener("dblclick", reset);
+            num.addEventListener("dblclick", reset);
+            ctls[which] = { el: ctl, set };
+          }
+          wrap.appendChild(ctl);
+        });
+
+        const applyVis = () => {
+          state.foil[P.key].override = ovr.checked;
+          ctls.g.el.hidden   = !ovr.checked;
+          ctls.bg.el.hidden  =  ovr.checked;
+          ctls.btn.el.hidden =  ovr.checked;
+        };
+        ovr.addEventListener("change", applyVis);
+        applyVis();
+        host.appendChild(wrap);
+        FOIL_REGISTRY.push({ P, ovr, ctls, def });
+      });
+    })();
+    function resetFoil(){
+      FOIL_REGISTRY.forEach(r => {
+        const f = state.foil[r.P.key];
+        f.override = r.def.override; f.g = r.def.g; f.bg = r.def.bg; f.btn = r.def.btn;
+        r.ovr.checked = r.def.override;
+        r.ctls.g.set(r.def.g); r.ctls.bg.set(r.def.bg); r.ctls.btn.set(r.def.btn);
+        r.ctls.g.el.hidden   = !r.def.override;
+        r.ctls.bg.el.hidden  =  r.def.override;
+        r.ctls.btn.el.hidden =  r.def.override;
+      });
+    }
+
+    bind("lenX", "lenX", "oLenX", v => v.toFixed(3));
+    bind("lenY", "lenY", "oLenY", v => v.toFixed(3));
+    bind("center", "centerDark", "oCenter", v => v.toFixed(2));
+    (function(){
+      const lr = document.getElementById("sideLR");
+      const tb = document.getElementById("sideTB");
+      lr.addEventListener("change", () => state.sideLR = lr.checked);
+      tb.addEventListener("change", () => state.sideTB = tb.checked);
+      state.sideLR = lr.checked; state.sideTB = tb.checked;
+    })();
+    bind("shadeStep", "shadeStep", "oStep", v => v.toFixed(3));
+    bind("btnRot", "btnRot", "oBtnRot", v => v.toFixed(2));
+    bind("btnCol", "btnCol", "oBtnCol", v => v.toFixed(2));
+    bind("btnSpr", "btnSpr", "oBtnSpr", v => v.toFixed(2));
+    bind("btnSat", "btnSat", "oBtnSat", v => v.toFixed(2));
+    bind("hoverRot", "hoverRot", "oHoverRot", v => v.toFixed(2));
+    bind("hoverCol", "hoverCol", "oHoverCol", v => v.toFixed(2));
+    bind("hoverSpr", "hoverSpr", "oHoverSpr", v => v.toFixed(2));
+    bind("hoverSat", "hoverSat", "oHoverSat", v => v.toFixed(2));
+    bind("hoverInner", "hoverInner", "oHoverInner");
+    bind("hoverOuter", "hoverOuter", "oHoverOuter");
+    document.getElementById("hoverCurve").addEventListener("change", e => state.hoverCurve = parseInt(e.target.value,10));
+
+    // button width slider also resizes the DOM button (height keeps aspect)
+    const foilBtn = document.getElementById("foilBtn");
+    bind("btnSize", "btnSize", "oBtnSize", null, () => {
+      foilBtn.style.width = state.btnSize + "px";
+      foilBtn.style.height = Math.round(state.btnSize * BTN_ASPECT) + "px";
+    });
+
+    // center button interaction
+    foilBtn.addEventListener("mouseenter", () => state.btnHoverT = 1);
+    foilBtn.addEventListener("mouseleave", () => state.btnHoverT = 0);
+    foilBtn.addEventListener("click", () => state.btnPulse = 1);
+
+    // label style switch (crystal foil <-> initial mono overlay)
+    state.btnStyle = "crystal";
+    const btnStyleSel = document.getElementById("btnStyle");
+    function applyBtnStyle(){ foilBtn.classList.remove("mode-crystal", "mode-initial"); foilBtn.classList.add("mode-" + state.btnStyle); }
+    btnStyleSel.addEventListener("change", () => { state.btnStyle = btnStyleSel.value; applyBtnStyle(); });
+    applyBtnStyle();
+
+    // reset-all + export config to clipboard (JSON)
+    function resetAll(){
+      REGISTRY.forEach(r => { r.el.value = DEFAULTS[r.key]; r.el.dispatchEvent(new Event("input")); });
+      resetFoil();
+      state.hoverCurve = 0;  document.getElementById("hoverCurve").value = "0";
+      state.sideLR = true;   document.getElementById("sideLR").checked = true;
+      state.sideTB = false;  document.getElementById("sideTB").checked = false;
+      state.btnStyle = "crystal"; btnStyleSel.value = "crystal"; applyBtnStyle();
+    }
+    function copyConfig(){
+      const cfg = {};
+      REGISTRY.forEach(r => cfg[r.key] = state[r.key]);
+      cfg.foil = {};
+      Object.keys(state.foil).forEach(k => cfg.foil[k] = Object.assign({}, state.foil[k]));
+      cfg.hoverCurve = state.hoverCurve;
+      cfg.sideLR = state.sideLR;
+      cfg.sideTB = state.sideTB;
+      cfg.btnStyle = state.btnStyle;
+      const json = JSON.stringify(cfg, null, 2);
+      const btn = document.getElementById("copyCfg");
+      const done = ok => { btn.textContent = ok ? "Copied!" : "Copy failed"; setTimeout(() => btn.textContent = "Copy config", 1200); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(json).then(() => done(true)).catch(() => done(false));
+      } else {
+        const ta = document.createElement("textarea"); ta.value = json; document.body.appendChild(ta);
+        ta.select(); let ok = false; try { ok = document.execCommand("copy"); } catch(e) {}
+        ta.remove(); done(ok);
+      }
+    }
+    document.getElementById("resetAll").addEventListener("click", resetAll);
+    document.getElementById("copyCfg").addEventListener("click", copyConfig);
+
+    const panel = document.getElementById("panel");
+    const toggle = document.getElementById("toggle");
+    const pauseBtn = document.getElementById("pause");
+    document.getElementById("hidePanel").addEventListener("click", () => panel.classList.add("hidden"));
+    toggle.addEventListener("click", () => panel.classList.remove("hidden"));
+    pauseBtn.addEventListener("click", () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "Play" : "Pause"; if(!state.paused) requestAnimationFrame(loop); });
+
+    window.addEventListener("keydown", e => {
+      if (e.key === "h" || e.key === "H") panel.classList.toggle("hidden");
+      if (e.code === "Space") { e.preventDefault(); pauseBtn.click(); }
+    });
+    window.addEventListener("mousemove", e => {
+      // device-pixel cursor position with y pointing up (matches gl_FragCoord)
+      state.mpxT = e.clientX * dpr;
+      state.mpyT = (window.innerHeight - e.clientY) * dpr;
+      state.mouseActT = 1;
+    });
+    window.addEventListener("mouseleave", () => state.mouseActT = 0);
+    window.addEventListener("mouseout", e => { if (!e.relatedTarget) state.mouseActT = 0; });
+
+    // ---------- Resize ----------
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.floor(window.innerWidth * dpr);
+      const h = Math.floor(window.innerHeight * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+      }
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    // ---------- Render loop ----------
+    const start = performance.now();
+    let last = start;
+    let mpx = -1e4, mpy = -1e4, mouseAct = 0, btnHover = 0;
+    let rotPhase = 0, colPhase = 0, hovRotPhase = 0, hovColPhase = 0, btnRotPhase = 0, btnColPhase = 0;
+    function loop() {
+      const now = performance.now();
+      const t = (now - start) / 1000;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      // smooth cursor position for hover radius
+      mpx += (state.mpxT - mpx) * 0.25;
+      mpy += (state.mpyT - mpy) * 0.25;
+      mouseAct += (state.mouseActT - mouseAct) * 0.08;
+      btnHover += (state.btnHoverT - btnHover) * 0.12;
+      state.btnPulse *= 0.94;
+      const btnH = Math.min(1, btnHover + state.btnPulse);
+
+      // effective per-side values (global overrides children when its checkbox is ticked)
+      const F = state.foil;
+      const eff = (k, w) => F[k].override ? F[k].g : F[k][w];
+      const rotBg = eff("rot","bg"),   rotBtn = eff("rot","btn");
+      const colBg = eff("color","bg"), colBtn = eff("color","btn");
+
+      // accumulate continuous phases: changing a speed alters velocity, not past phase (no jumps)
+      rotPhase    += dt * rotBg;
+      colPhase    += dt * colBg;
+      hovRotPhase += dt * rotBg * state.hoverRot;
+      hovColPhase += dt * colBg * state.hoverCol;
+      btnRotPhase += dt * rotBtn * (1.0 + btnH * state.btnRot);
+      btnColPhase += dt * colBtn * (1.0 + btnH * state.btnCol);
+
+      gl.useProgram(prog);
+      gl.bindVertexArray(vao);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.uniform1i(U.uTex, 0);
+      gl.uniform2f(U.uRes, canvas.width, canvas.height);
+      gl.uniform1f(U.uTime, t);
+      gl.uniform1f(U.uScaleBg,   eff("scale","bg")  * dpr);
+      gl.uniform1f(U.uScaleBtn,  eff("scale","btn") * dpr);
+      gl.uniform1f(U.uOverlapBg,  eff("overlap","bg"));
+      gl.uniform1f(U.uOverlapBtn, eff("overlap","btn"));
+      gl.uniform1f(U.uSpreadBg,   eff("spread","bg"));
+      gl.uniform1f(U.uSpreadBtn,  eff("spread","btn"));
+      gl.uniform1f(U.uSatBg,      eff("sat","bg"));
+      gl.uniform1f(U.uSatBtn,     eff("sat","btn"));
+      gl.uniform1i(U.uPaletteBg,  eff("palette","bg")  | 0);
+      gl.uniform1i(U.uPaletteBtn, eff("palette","btn") | 0);
+      gl.uniform2f(U.uMousePx, mpx, mpy);
+      gl.uniform1f(U.uMouseAct, mouseAct);
+      gl.uniform1f(U.uHoverRot, state.hoverRot);
+      gl.uniform1f(U.uHoverCol, state.hoverCol);
+      gl.uniform1f(U.uHoverSpr, state.hoverSpr);
+      gl.uniform1f(U.uHoverSat, state.hoverSat);
+      gl.uniform1f(U.uHoverInner, state.hoverInner * dpr);
+      gl.uniform1f(U.uHoverOuter, state.hoverOuter * dpr);
+      gl.uniform1i(U.uHoverCurve, state.hoverCurve);
+      gl.uniform1f(U.uRotPhase, rotPhase);
+      gl.uniform1f(U.uColPhase, colPhase);
+      gl.uniform1f(U.uHovRotPhase, hovRotPhase);
+      gl.uniform1f(U.uHovColPhase, hovColPhase);
+      gl.uniform1f(U.uBtnRotPhase, btnRotPhase);
+      gl.uniform1f(U.uBtnColPhase, btnColPhase);
+      gl.uniform1f(U.uLenX, state.lenX);
+      gl.uniform1f(U.uLenY, state.lenY);
+      gl.uniform1f(U.uSideLR, state.sideLR ? 1 : 0);
+      gl.uniform1f(U.uSideTB, state.sideTB ? 1 : 0);
+      gl.uniform1f(U.uCenterDark, state.centerDark);
+      gl.uniform1f(U.uShadeStep, state.shadeStep);
+      gl.uniform2f(U.uBtnPx, canvas.width * 0.5, canvas.height * 0.5);
+      const bw = state.btnSize * dpr, bh = state.btnSize * BTN_ASPECT * dpr;
+      gl.uniform2f(U.uBtnSize, bw, bh);
+      gl.uniform1f(U.uBtnHover, btnH);
+      gl.uniform1f(U.uBtnRot, state.btnRot);
+      gl.uniform1f(U.uBtnCol, state.btnCol);
+      gl.uniform1f(U.uBtnSpr, state.btnSpr);
+      gl.uniform1f(U.uBtnSat, state.btnSat);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      if (!state.paused) requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>
