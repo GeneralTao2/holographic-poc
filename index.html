@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Holographic Foil — Mob Psycho ??% Effect</title>
+<title>Holographic Foil</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Zen+Dots&display=swap" rel="stylesheet" />
@@ -115,6 +115,14 @@
   <div id="panel">
     <h1>Holographic Foil</h1>
 
+    <div class="row">
+      <div class="top"><label>Profile</label></div>
+      <select id="profileSel">
+        <option value="1">1 · CD (1-channel)</option>
+        <option value="2">2 · CD2 (2-channel)</option>
+      </select>
+    </div>
+
     <p class="note">Each setting has Global · BG · Button. Untick “global” to tune the page background and the button separately.</p>
     <div id="foilParams"></div>
 
@@ -144,6 +152,16 @@
     <div class="row">
       <div class="top"><label>Shade step</label><output id="oStep">0.06</output></div>
       <input id="shadeStep" type="range" min="0.01" max="0.45" step="0.005" value="0.06" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Segment edge softness</label><output id="oEdgeSoft">3.00</output></div>
+      <input id="edgeSoft" type="range" min="0.5" max="20" step="0.1" value="3.0" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Speed spread</label><output id="oSpeedSpread">2.00</output></div>
+      <input id="speedSpread" type="range" min="0" max="4" step="0.05" value="2.0" />
     </div>
 
     <div class="sub">Center button</div>
@@ -232,11 +250,15 @@
       <button id="resetAll">Reset all</button>
       <button id="copyCfg">Copy config</button>
     </div>
+    <div class="btns">
+      <button id="syncAngle">Sync angles</button>
+    </div>
     <div class="hint">Double-click a value or slider to reset it · H: toggle UI · Space: pause</div>
   </div>
   <div id="toggle" title="Show controls">⚙</div>
 
-  <script src="round-image.js"></script>
+  <script src="holographic-foil-segment.js"></script>
+  <!-- <script src="round-image.js"></script> -->
   <script>
   (function () {
     "use strict";
@@ -262,7 +284,8 @@
     uniform sampler2D uTex;
 
     uniform float uScaleBg;   uniform float uScaleBtn;    // scale radius (px)
-    uniform float uOverlapBg; uniform float uOverlapBtn;  // row spacing factor (< 1 = more overlap)
+    uniform float uOverlapBg;  uniform float uOverlapBtn;  // vertical row spacing factor (< 1 = more overlap)
+    uniform float uOverlapXBg; uniform float uOverlapXBtn; // horizontal spacing factor (< 1 = more overlap)
     uniform float uSpreadBg;  uniform float uSpreadBtn;   // palette luminance spread
     uniform float uSatBg;     uniform float uSatBtn;      // saturation
     uniform int   uPaletteBg; uniform int   uPaletteBtn;  // palette index
@@ -287,6 +310,10 @@
     uniform float uSideTB;    // enable top/bottom shadows (0/1)
     uniform float uCenterDark;// center darkening
     uniform float uShadeStep; // dark-to-effect transition width (0..0.5)
+    uniform float uEdgeSoft;  // segment edge softness (px)
+    uniform float uSpeedSpread;// per-disc rotation speed variation (0 = uniform)
+    uniform float uSyncAngle;  // 1 = drop per-disc angle offset (align all discs)
+    uniform int   uColorMode;  // 0 = luminance (1-ch), 1 = angular hue (2-ch)
     uniform vec2  uBtnPx;     // button center (device px)
     uniform vec2  uBtnSize;   // button width/height (device px)
     uniform float uBtnHover;  // 0..1 hover on button
@@ -324,9 +351,9 @@
     float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 
     // fish-scale holographic foil sampled at pixel uv (device px), disc radius R, over bg
-    vec3 foil(vec2 uv, float R, float rotPhase, float colPhase, float spread, float sat, float overlap, int palette, vec3 bg){
-      float rowH = R * overlap;       // vertical spacing -> overlap
-      float colW = R * 0.92;          // horizontal spacing
+    vec3 foil(vec2 uv, float R, float rotPhase, float colPhase, float spread, float sat, float overlapY, float overlapX, int palette, vec3 bg){
+      float rowH = R * overlapY;      // vertical spacing -> overlap
+      float colW = R * overlapX;      // horizontal spacing -> overlap
       vec3 col = bg;
       float baseRow = floor(uv.y / rowH);
       for(float dr = -1.0; dr <= 2.0; dr += 1.0){
@@ -341,22 +368,34 @@
           if(length(p) > R) continue;
 
           float id = hash(vec2(row, cc));
-          float spin = (id - 0.5) * 2.0;
-          float ang  = id * 6.2831 + rotPhase * (0.4 + spin);
+          float spin = (id - 0.5) * uSpeedSpread;
+          float ang  = id * 6.2831 * (1.0 - uSyncAngle) + rotPhase * (0.4 + spin);
           vec2 pr = rot(p, ang);
 
+          // cropped segment: disc fills the frame, so natural UV mapping applies
           vec2 tuv = pr / (2.0 * R) + 0.5;
           vec4 tex = texture(uTex, tuv);
 
+          // disc shape comes purely from a clean circle (ignore texture alpha fringe)
           float d = length(p) / R;
-          float edge = smoothstep(1.0, 0.90, d);
-          float alpha = edge * max(tex.a, step(0.02, tex.r));
+          float aa = uEdgeSoft / R;                   // feather width in px (derivative-free)
+          float alpha = 1.0 - smoothstep(1.0 - aa, 1.0, d);
           if(alpha < 0.003) continue;
 
-          float lum = dot(tex.rgb, vec3(0.299,0.587,0.114));
-          float phase = colPhase + id * 1.7 + d * 0.15;
+          // colour source depends on the active profile's disc type
+          float lum;
+          float phase = colPhase + id * 1.7;
+          if(uColorMode == 1){
+            // 2-channel angular disc: R=cos, G=sin -> seamless hue around disc
+            vec2 g = tex.rg * 2.0 - 1.0;
+            lum = atan(g.y, g.x) / 6.2831 + 0.5;
+          } else {
+            // 1-channel disc: luminance drives the palette
+            lum = dot(tex.rgb, vec3(0.299,0.587,0.114));
+            phase += d * 0.15;
+          }
           vec3 c = colorama(lum, phase, spread, sat, palette);
-          c += pow(lum, 6.0) * 0.6;         // metallic sheen
+          if(uColorMode == 0) c += pow(lum, 6.0) * 0.6;   // metallic sheen (1-channel)
           col = mix(col, c, alpha);
         }
       }
@@ -382,7 +421,7 @@
       vec3 col = foil(uv, uScaleBg,
                       uRotPhase + prox * uHovRotPhase,
                       uColPhase + prox * uHovColPhase,
-                      sprE, satE, uOverlapBg, uPaletteBg, vec3(0.04,0.045,0.06));
+                      sprE, satE, uOverlapBg, uOverlapXBg, uPaletteBg, vec3(0.04,0.045,0.06));
 
       // ---- side shadows: 100% black bands, length-controlled, toggleable per axis ----
       float st = max(uShadeStep, 0.001);
@@ -414,7 +453,7 @@
       if(ins.x * ins.y > 0.5){
         float bspr = uSpreadBtn * (1.0 + uBtnHover * uBtnSpr);
         float bsat = uSatBtn    + uBtnHover * uBtnSat;
-        vec3 bcol  = foil(gl_FragCoord.xy, uScaleBtn, uBtnRotPhase, uBtnColPhase, bspr, bsat, uOverlapBtn, uPaletteBtn, vec3(0.0));
+        vec3 bcol  = foil(gl_FragCoord.xy, uScaleBtn, uBtnRotPhase, uBtnColPhase, bspr, bsat, uOverlapBtn, uOverlapXBtn, uPaletteBtn, vec3(0.0));
         float ed   = min(hsz.x - abs(bp.x), hsz.y - abs(bp.y)); // px from nearest edge
         float border = 1.0 - smoothstep(1.0, 3.0, ed);
         bcol += border * (0.15 + 0.85 * uBtnHover) * vec3(0.75, 0.9, 1.0);
@@ -457,37 +496,42 @@
 
     // uniforms
     const U = {};
-    ["uRes","uTime","uTex","uScaleBg","uScaleBtn","uOverlapBg","uOverlapBtn","uSpreadBg","uSpreadBtn","uSatBg","uSatBtn","uPaletteBg","uPaletteBtn",
-     "uMousePx","uMouseAct","uHoverRot","uHoverCol","uHoverSpr","uHoverSat","uHoverInner","uHoverOuter","uHoverCurve","uRotPhase","uColPhase","uHovRotPhase","uHovColPhase","uBtnRotPhase","uBtnColPhase","uLenX","uLenY","uSideLR","uSideTB","uCenterDark","uShadeStep","uBtnPx","uBtnSize","uBtnHover","uBtnRot","uBtnCol","uBtnSpr","uBtnSat"]
+    ["uRes","uTime","uTex","uScaleBg","uScaleBtn","uOverlapBg","uOverlapBtn","uOverlapXBg","uOverlapXBtn","uSpreadBg","uSpreadBtn","uSatBg","uSatBtn","uPaletteBg","uPaletteBtn",
+     "uMousePx","uMouseAct","uHoverRot","uHoverCol","uHoverSpr","uHoverSat","uHoverInner","uHoverOuter","uHoverCurve","uRotPhase","uColPhase","uHovRotPhase","uHovColPhase","uBtnRotPhase","uBtnColPhase","uLenX","uLenY","uSideLR","uSideTB","uCenterDark","uShadeStep","uEdgeSoft","uSpeedSpread","uSyncAngle","uColorMode","uBtnPx","uBtnSize","uBtnHover","uBtnRot","uBtnCol","uBtnSpr","uBtnSat"]
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
 
-    // texture
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128,128,128,255]));
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-    const img = new Image();
-    img.onload = () => {
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      gl.generateMipmap(gl.TEXTURE_2D);
-    };
-    img.src = (typeof ROUND_IMAGE !== "undefined") ? ROUND_IMAGE : "round.png";
+    // textures: one per profile segment (cd = 1-channel, cd2 = 2-channel)
+    function makeTexture(src){
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128,128,128,255]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      const img = new Image();
+      img.onload = () => {
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        gl.generateMipmap(gl.TEXTURE_2D);
+      };
+      img.src = src;
+      return t;
+    }
+    const SEGS = (typeof SEGMENTS !== "undefined") ? SEGMENTS : { cd: (typeof ROUND_IMAGE !== "undefined") ? ROUND_IMAGE : "round.png" };
+    const textures = { cd: makeTexture(SEGS.cd), cd2: makeTexture(SEGS.cd2 || SEGS.cd) };
 
     // ---------- State / controls ----------
     const BTN_ASPECT = 0.36;   // button height = width * aspect
     const state = {
       paused: false,
       lenX: 0.255, lenY: 0.08, sideLR: true, sideTB: false,
-      centerDark: 1.0, shadeStep: 0.06,
+      centerDark: 1.0, shadeStep: 0.06, edgeSoft: 3.0, speedSpread: 2.0, syncAngle: 0,
       btnSize: 260, btnRot: 1.12, btnCol: 0.63, btnSpr: 1.00, btnSat: 0.21,
       hoverRot: 0.0, hoverCol: 0.0, hoverSpr: 0.0, hoverSat: 0.54,
       hoverInner: 0, hoverOuter: 202, hoverCurve: 0,
+      seg: "cd", colorMode: 0,   // active profile's segment + colour mode
       foil: {},   // per-side foil params, populated by the generator below
       // interaction targets (smoothed in the loop)
       mpxT: 0, mpyT: 0, mouseActT: 0, btnHoverT: 0, btnPulse: 0
@@ -525,13 +569,14 @@
     }
     // ---- per-side foil params: Global / BG / Button (global overrides children when ticked) ----
     const FOIL_PARAMS = [
-      { key:"scale",   label:"Scale size",       min:20,   max:260, step:1,    def:40,   dbg:40,   dbtn:66,   dov:false },
-      { key:"overlap", label:"Overlap",          min:0.35, max:0.9, step:0.01, def:0.60, dbg:0.78, dbtn:0.60, dov:false },
+      { key:"scale",    label:"Scale size",  min:20,   max:260, step:1,    def:40,   dbg:32,   dbtn:46,   dov:false },
+      { key:"overlap",  label:"Overlap V",   min:0.35, max:1.2, step:0.01, def:0.60, dbg:1.00, dbtn:0.84, dov:false },
+      { key:"overlapX", label:"Overlap H",   min:0.35, max:1.2, step:0.01, def:0.92, dbg:1.15, dbtn:1.03, dov:false },
       { key:"rot",     label:"Rotation speed",   min:0,    max:3,   step:0.01, def:0.60 },
       { key:"color",   label:"Color flow speed", min:0,    max:2,   step:0.01, def:0.35 },
       { key:"spread",  label:"Color spread",     min:0.2,  max:3,   step:0.01, def:1.30 },
       { key:"sat",     label:"Saturation",       min:0,    max:1.6, step:0.01, def:0.22, dbg:0.40, dbtn:0.40 },
-      { key:"palette", label:"Palette", type:"select", def:0, options:["Rainbow foil","Oil slick","Psychic aura","Gold / magenta"] }
+      { key:"palette", label:"Palette", type:"select", def:3, dbg:0, dbtn:0, options:["Rainbow foil","Oil slick","Psychic aura","Gold / magenta"] }
     ];
     const FOIL_REGISTRY = [];
     (function buildFoilParams(){
@@ -620,6 +665,8 @@
       state.sideLR = lr.checked; state.sideTB = tb.checked;
     })();
     bind("shadeStep", "shadeStep", "oStep", v => v.toFixed(3));
+    bind("edgeSoft", "edgeSoft", "oEdgeSoft", v => v.toFixed(2));
+    bind("speedSpread", "speedSpread", "oSpeedSpread", v => v.toFixed(2));
     bind("btnRot", "btnRot", "oBtnRot", v => v.toFixed(2));
     bind("btnCol", "btnCol", "oBtnCol", v => v.toFixed(2));
     bind("btnSpr", "btnSpr", "oBtnSpr", v => v.toFixed(2));
@@ -660,7 +707,8 @@
       state.sideTB = false;  document.getElementById("sideTB").checked = false;
       state.btnStyle = "crystal"; btnStyleSel.value = "crystal"; applyBtnStyle();
     }
-    function copyConfig(){
+    // ---- config snapshot / restore (used by profiles + copy) ----
+    function getConfig(){
       const cfg = {};
       REGISTRY.forEach(r => cfg[r.key] = state[r.key]);
       cfg.foil = {};
@@ -669,6 +717,28 @@
       cfg.sideLR = state.sideLR;
       cfg.sideTB = state.sideTB;
       cfg.btnStyle = state.btnStyle;
+      return cfg;
+    }
+    function applyConfig(cfg){
+      REGISTRY.forEach(r => { if(cfg[r.key] !== undefined){ r.el.value = cfg[r.key]; r.el.dispatchEvent(new Event("input")); } });
+      if(cfg.foil){
+        FOIL_REGISTRY.forEach(r => {
+          const f = cfg.foil[r.P.key]; if(!f) return;
+          state.foil[r.P.key] = { override:f.override, g:f.g, bg:f.bg, btn:f.btn };
+          r.ovr.checked = f.override;
+          r.ctls.g.set(f.g); r.ctls.bg.set(f.bg); r.ctls.btn.set(f.btn);
+          r.ctls.g.el.hidden   = !f.override;
+          r.ctls.bg.el.hidden  =  f.override;
+          r.ctls.btn.el.hidden =  f.override;
+        });
+      }
+      if(cfg.hoverCurve !== undefined){ state.hoverCurve = cfg.hoverCurve; document.getElementById("hoverCurve").value = String(cfg.hoverCurve); }
+      if(cfg.sideLR !== undefined){ state.sideLR = cfg.sideLR; document.getElementById("sideLR").checked = cfg.sideLR; }
+      if(cfg.sideTB !== undefined){ state.sideTB = cfg.sideTB; document.getElementById("sideTB").checked = cfg.sideTB; }
+      if(cfg.btnStyle !== undefined){ state.btnStyle = cfg.btnStyle; btnStyleSel.value = cfg.btnStyle; applyBtnStyle(); }
+    }
+    function copyConfig(){
+      const cfg = getConfig();
       const json = JSON.stringify(cfg, null, 2);
       const btn = document.getElementById("copyCfg");
       const done = ok => { btn.textContent = ok ? "Copied!" : "Copy failed"; setTimeout(() => btn.textContent = "Copy config", 1200); };
@@ -683,12 +753,39 @@
     document.getElementById("resetAll").addEventListener("click", resetAll);
     document.getElementById("copyCfg").addEventListener("click", copyConfig);
 
+    // ---- profiles: each keeps its own segment, colour mode and config snapshot ----
+    const profiles = {
+      1: { seg:"cd",  colorMode:0, cfg:null },
+      2: { seg:"cd2", colorMode:1, cfg:null }
+    };
+    let activeProfile = 1;
+    // seed both profiles from the current (default) config so they start independent
+    profiles[1].cfg = getConfig();
+    profiles[2].cfg = getConfig();
+    function switchProfile(id){
+      if(id === activeProfile) return;
+      profiles[activeProfile].cfg = getConfig();        // save what we're leaving
+      activeProfile = id;
+      const p = profiles[id];
+      state.seg = p.seg; state.colorMode = p.colorMode; // swap texture + shader mode
+      if(p.cfg) applyConfig(p.cfg);                     // restore this profile's values
+    }
+    const profileSel = document.getElementById("profileSel");
+    profileSel.addEventListener("change", () => switchProfile(parseInt(profileSel.value,10)));
+
     const panel = document.getElementById("panel");
     const toggle = document.getElementById("toggle");
     const pauseBtn = document.getElementById("pause");
     document.getElementById("hidePanel").addEventListener("click", () => panel.classList.add("hidden"));
     toggle.addEventListener("click", () => panel.classList.remove("hidden"));
     pauseBtn.addEventListener("click", () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "Play" : "Pause"; if(!state.paused) requestAnimationFrame(loop); });
+
+    const syncBtn = document.getElementById("syncAngle");
+    syncBtn.addEventListener("click", () => {
+      state.syncAngle = state.syncAngle ? 0 : 1;
+      syncBtn.textContent = state.syncAngle ? "Unsync angles" : "Sync angles";
+      syncBtn.style.background = state.syncAngle ? "#2a3550" : "";
+    });
 
     window.addEventListener("keydown", e => {
       if (e.key === "h" || e.key === "H") panel.classList.toggle("hidden");
@@ -751,14 +848,17 @@
       gl.useProgram(prog);
       gl.bindVertexArray(vao);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.bindTexture(gl.TEXTURE_2D, textures[state.seg] || textures.cd);
       gl.uniform1i(U.uTex, 0);
+      gl.uniform1i(U.uColorMode, state.colorMode);
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform1f(U.uTime, t);
       gl.uniform1f(U.uScaleBg,   eff("scale","bg")  * dpr);
       gl.uniform1f(U.uScaleBtn,  eff("scale","btn") * dpr);
-      gl.uniform1f(U.uOverlapBg,  eff("overlap","bg"));
-      gl.uniform1f(U.uOverlapBtn, eff("overlap","btn"));
+      gl.uniform1f(U.uOverlapBg,   eff("overlap","bg"));
+      gl.uniform1f(U.uOverlapBtn,  eff("overlap","btn"));
+      gl.uniform1f(U.uOverlapXBg,  eff("overlapX","bg"));
+      gl.uniform1f(U.uOverlapXBtn, eff("overlapX","btn"));
       gl.uniform1f(U.uSpreadBg,   eff("spread","bg"));
       gl.uniform1f(U.uSpreadBtn,  eff("spread","btn"));
       gl.uniform1f(U.uSatBg,      eff("sat","bg"));
@@ -786,6 +886,9 @@
       gl.uniform1f(U.uSideTB, state.sideTB ? 1 : 0);
       gl.uniform1f(U.uCenterDark, state.centerDark);
       gl.uniform1f(U.uShadeStep, state.shadeStep);
+      gl.uniform1f(U.uEdgeSoft, state.edgeSoft);
+      gl.uniform1f(U.uSpeedSpread, state.speedSpread);
+      gl.uniform1f(U.uSyncAngle, state.syncAngle);
       gl.uniform2f(U.uBtnPx, canvas.width * 0.5, canvas.height * 0.5);
       const bw = state.btnSize * dpr, bh = state.btnSize * BTN_ASPECT * dpr;
       gl.uniform2f(U.uBtnSize, bw, bh);
