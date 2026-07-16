@@ -307,6 +307,16 @@
     </div>
 
     <div class="row">
+      <div class="top"><label>Label shadow size</label><output id="oLabelShadowSize">2</output></div>
+      <input id="labelShadowSize" type="range" min="0" max="12" step="0.1" value="2" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Label shadow intensity</label><output id="oLabelShadowInt">1</output></div>
+      <input id="labelShadowInt" type="range" min="0" max="1" step="0.01" value="1" />
+    </div>
+
+    <div class="row">
       <div class="top"><label>Button width</label><output id="oBtnSize">260</output></div>
       <input id="btnSize" type="range" min="120" max="520" step="1" value="260" />
     </div>
@@ -817,6 +827,7 @@
       btnSize: 260, btnShade: 0.06, btnMargin: 0.025, btnRot: 1.12, btnCol: 0.63, btnSpr: 1.00, btnSat: 0.21,
       hoverRot: 0.0, hoverCol: 0.0, hoverSpr: 0.0, hoverSat: 0.54,
       hoverInner: 0, hoverOuter: 202, hoverCurve: 0,
+      labelShadowSize: 2, labelShadowInt: 1,
       seg: "cd", colorMode: 0,   // active profile's segment + colour mode
       foil: {},   // per-side foil params, populated by the generator below
       // interaction targets (smoothed in the loop)
@@ -999,9 +1010,28 @@
     // label style switch (crystal foil <-> initial mono overlay)
     state.btnStyle = "crystal";
     const btnStyleSel = document.getElementById("btnStyle");
-    function applyBtnStyle(){ foilBtn.classList.remove("mode-crystal", "mode-initial"); foilBtn.classList.add("mode-" + state.btnStyle); }
+    // label shadow (size + intensity), applied as a drop-shadow filter on the
+    // label itself so the shadow is always drawn behind the glyphs (works for
+    // the translucent mono-overlay label too, keeping the text on top).
+    const foilSpan = foilBtn.querySelector("span");
+    function applyLabelShadow(){
+      const s = state.labelShadowSize, a = state.labelShadowInt;
+      let f =
+        `drop-shadow(0 0 ${s.toFixed(2)}px rgba(0,0,0,${a})) ` +
+        `drop-shadow(0 0 ${(s*3).toFixed(2)}px rgba(0,0,0,${(a*0.75).toFixed(3)}))`;
+      if(state.btnStyle === "crystal"){
+        f += ` drop-shadow(1.1px 0 0.6px rgba(255,40,120,0.38))` +
+             ` drop-shadow(-1.1px 0 0.6px rgba(40,190,255,0.38))`;
+      }
+      foilSpan.style.textShadow = "none";
+      foilSpan.style.filter = f;
+    }
+    function applyBtnStyle(){ foilBtn.classList.remove("mode-crystal", "mode-initial"); foilBtn.classList.add("mode-" + state.btnStyle); applyLabelShadow(); }
     btnStyleSel.addEventListener("change", () => { state.btnStyle = btnStyleSel.value; applyBtnStyle(); });
     applyBtnStyle();
+    bind("labelShadowSize", "labelShadowSize", "oLabelShadowSize", null, applyLabelShadow);
+    bind("labelShadowInt", "labelShadowInt", "oLabelShadowInt", null, applyLabelShadow);
+    applyLabelShadow();
 
     // reset-all + export config to clipboard (JSON)
     function resetAll(){
@@ -1095,9 +1125,9 @@
       hoverRot:0, hoverCol:0, hoverSpr:0, hoverSat:0.54,
       hoverInner:0, hoverOuter:202, btnSize:260,
       foil:{
-        scale:{override:false,g:40,bg:30,btn:46},
-        overlap:{override:false,g:0.6,bg:1.3,btn:0.84},
-        overlapX:{override:false,g:0.92,bg:1.3,btn:1.03},
+        scale:{override:false,g:40,bg:32,btn:9},
+        overlap:{override:false,g:0.6,bg:1.3,btn:1.3},
+        overlapX:{override:false,g:0.92,bg:1.3,btn:1.3},
         rot:{override:true,g:4.52,bg:0.6,btn:0.6},
         color:{override:true,g:0.35,bg:0.35,btn:0.35},
         spread:{override:true,g:1.3,bg:1.3,btn:1.3},
