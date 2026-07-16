@@ -106,6 +106,9 @@
   }
   #panel.hidden ~ #toggle { display: flex; }
   .hint { opacity:0.45; font-size:10px; margin-top:4px; }
+  #searchBox { width:100%; background:#11131d; color:#dfe4f0; border:1px solid rgba(255,255,255,.15); border-radius:6px; padding:5px 7px; font-family:inherit; font-size:11px; }
+  .filtered { display:none !important; }
+  .search-hit { outline:1px solid #7ad0ff; outline-offset:2px; border-radius:6px; }
 </style>
 </head>
 <body>
@@ -123,8 +126,18 @@
       </select>
     </div>
 
+    <div class="row">
+      <div class="top"><label>Search settings</label></div>
+      <input id="searchBox" type="text" placeholder="filter controls…" />
+      <label class="chk"><input type="checkbox" id="searchFilter" /> show only matches</label>
+    </div>
+
     <p class="note">Each setting has Global · BG · Button. Untick “global” to tune the page background and the button separately.</p>
     <div id="foilParams"></div>
+
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="squareGrid" /> Square grid layout</label>
+    </div>
 
     <div class="sub">Scene shading</div>
 
@@ -162,6 +175,51 @@
     <div class="row">
       <div class="top"><label>Speed spread</label><output id="oSpeedSpread">2.00</output></div>
       <input id="speedSpread" type="range" min="0" max="4" step="0.05" value="2.0" />
+    </div>
+
+    <div class="row">
+      <div class="top"><label>Random spin</label><output id="oRandomSpin">0.00</output></div>
+      <input id="randomSpin" type="range" min="0" max="1" step="0.01" value="0" />
+    </div>
+
+    <div class="row" id="rowPlateau">
+      <div class="top"><label>CD2 sector plateau (°)</label><output id="oPlateau">15</output></div>
+      <input id="plateauDeg" type="range" min="0" max="45" step="1" value="15" />
+    </div>
+
+    <div class="row" id="rowGradSat">
+      <div class="top"><label>Gradient saturation</label><output id="oGradSat">0.00</output></div>
+      <input id="gradSat" type="range" min="0" max="1" step="0.01" value="0" />
+    </div>
+
+    <div class="row" id="rowGradWhiteB">
+      <div class="top"><label>Gradient blue → white</label><output id="oGradWhiteB">1.00</output></div>
+      <input id="gradWhiteB" type="range" min="0" max="2" step="0.01" value="1" />
+    </div>
+
+    <div class="row" id="rowGradWhiteM">
+      <div class="top"><label>Gradient magenta → white</label><output id="oGradWhiteM">1.00</output></div>
+      <input id="gradWhiteM" type="range" min="0" max="2" step="0.01" value="1" />
+    </div>
+
+    <div class="row" id="rowWhiteGlow">
+      <div class="top"><label>White glow (magenta)</label><output id="oWhiteGlow">0.00</output></div>
+      <input id="whiteGlow" type="range" min="0" max="3" step="0.01" value="0" />
+    </div>
+
+    <div class="row" id="rowBloom">
+      <div class="top"><label>Glow bloom</label><output id="oBloom">0.00</output></div>
+      <input id="bloom" type="range" min="0" max="3" step="0.01" value="0" />
+    </div>
+
+    <div class="row" id="rowWaveLen">
+      <div class="top"><label>Gradient wavelength</label><output id="oWaveLen">0.80</output></div>
+      <input id="waveLen" type="range" min="0.1" max="3" step="0.01" value="0.8" />
+    </div>
+
+    <div class="row" id="rowWaveSpeed">
+      <div class="top"><label>Gradient flow speed</label><output id="oWaveSpeed">0.06</output></div>
+      <input id="waveSpeed" type="range" min="0" max="0.5" step="0.005" value="0.06" />
     </div>
 
     <div class="sub">Center button</div>
@@ -272,7 +330,7 @@
 
     // ---------- Shaders ----------
     const VERT = `#version 300 es
-    in vec2 aPos;
+    layout(location = 0) in vec2 aPos;
     void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
     const FRAG = `#version 300 es
@@ -313,7 +371,15 @@
     uniform float uEdgeSoft;  // segment edge softness (px)
     uniform float uSpeedSpread;// per-disc rotation speed variation (0 = uniform)
     uniform float uSyncAngle;  // 1 = drop per-disc angle offset (align all discs)
+    uniform float uSquare;     // 1 = square grid (no row stagger)
     uniform int   uColorMode;  // 0 = luminance (1-ch), 1 = angular hue (2-ch)
+    uniform float uPlateauDeg; // CD2 pure-colour plateau per sector (degrees)
+    uniform float uGradSat;    // overall gradient strength (0 = off)
+    uniform float uWaveLen;    // overall gradient wavelength
+    uniform float uWaveSpeed;  // overall gradient flow speed
+    uniform float uGradWhiteB;  // blue-side gradient influence on white sectors
+    uniform float uGradWhiteM;  // magenta-side gradient influence on white sectors
+    uniform float uWhiteGlow;   // white sectors' metallic glow under magenta light
     uniform vec2  uBtnPx;     // button center (device px)
     uniform vec2  uBtnSize;   // button width/height (device px)
     uniform float uBtnHover;  // 0..1 hover on button
@@ -350,6 +416,63 @@
     // deterministic pseudo random from cell id
     float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 
+    // CD2 sector colours by centre index: magenta, blue, white, blue (repeat)
+    vec3 cd2Color(float i){
+      float m = mod(i, 4.0);
+      if(m < 0.5) return vec3(1.0, 0.03, 0.88);   // magenta
+      if(m < 1.5) return vec3(0.10, 0.22, 0.72);  // blue (darker)
+      if(m < 2.5) return vec3(1.0);               // white
+      return vec3(0.10, 0.22, 0.72);              // blue (darker)
+    }
+
+    // ---- simplex (barycentric) noise - Ashima Arts / Stefan Gustavson ----
+    vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+    vec4 mod289(vec4 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+    vec4 permute(vec4 x){ return mod289(((x*34.0)+1.0)*x); }
+    vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314 * r; }
+    float snoise(vec3 v){
+      const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+      const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+      vec3 i  = floor(v + dot(v, C.yyy));
+      vec3 x0 = v - i + dot(i, C.xxx);
+      vec3 g = step(x0.yzx, x0.xyz);
+      vec3 l = 1.0 - g;
+      vec3 i1 = min(g.xyz, l.zxy);
+      vec3 i2 = max(g.xyz, l.zxy);
+      vec3 x1 = x0 - i1 + C.xxx;
+      vec3 x2 = x0 - i2 + C.yyy;
+      vec3 x3 = x0 - D.yyy;
+      i = mod289(i);
+      vec4 p = permute(permute(permute(
+                 i.z + vec4(0.0, i1.z, i2.z, 1.0))
+               + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+               + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+      float n_ = 0.142857142857;
+      vec3 ns = n_ * D.wyz - D.xzx;
+      vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+      vec4 x_ = floor(j * ns.z);
+      vec4 y_ = floor(j - 7.0 * x_);
+      vec4 x = x_ * ns.x + ns.yyyy;
+      vec4 y = y_ * ns.x + ns.yyyy;
+      vec4 h = 1.0 - abs(x) - abs(y);
+      vec4 b0 = vec4(x.xy, y.xy);
+      vec4 b1 = vec4(x.zw, y.zw);
+      vec4 s0 = floor(b0)*2.0 + 1.0;
+      vec4 s1 = floor(b1)*2.0 + 1.0;
+      vec4 sh = -step(h, vec4(0.0));
+      vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+      vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+      vec3 p0 = vec3(a0.xy, h.x);
+      vec3 p1 = vec3(a0.zw, h.y);
+      vec3 p2 = vec3(a1.xy, h.z);
+      vec3 p3 = vec3(a1.zw, h.w);
+      vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+      p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+      vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+      m = m * m;
+      return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+    }
+
     // fish-scale holographic foil sampled at pixel uv (device px), disc radius R, over bg
     vec3 foil(vec2 uv, float R, float rotPhase, float colPhase, float spread, float sat, float overlapY, float overlapX, int palette, vec3 bg){
       float rowH = R * overlapY;      // vertical spacing -> overlap
@@ -358,7 +481,7 @@
       float baseRow = floor(uv.y / rowH);
       for(float dr = -1.0; dr <= 2.0; dr += 1.0){
         float row = baseRow + dr;
-        float stagger = mod(row, 2.0) * 0.5 * colW;
+        float stagger = mod(row, 2.0) * 0.5 * colW * (1.0 - uSquare);
         float cy = row * rowH + rowH * 0.5;
         float baseCol = floor((uv.x - stagger) / colW);
         for(float dc = -1.0; dc <= 1.0; dc += 1.0){
@@ -382,20 +505,47 @@
           float alpha = 1.0 - smoothstep(1.0 - aa, 1.0, d);
           if(alpha < 0.003) continue;
 
-          // colour source depends on the active profile's disc type
-          float lum;
-          float phase = colPhase + id * 1.7;
+          vec3 c;
           if(uColorMode == 1){
-            // 2-channel angular disc: R=cos, G=sin -> seamless hue around disc
-            vec2 g = tex.rg * 2.0 - 1.0;
-            lum = atan(g.y, g.x) / 6.2831 + 0.5;
+            // 2-channel CD2: angle-based sectors with a pure-colour plateau, then blend
+            vec2 g = tex.rg * 2.0 - 1.0;             // (cos 2theta, sin 2theta)
+            float a = atan(g.y, g.x);                // 2theta in (-pi, pi]
+            float seg = a / 1.57079633;              // centre index (centres pi/2 apart)
+            float k = floor(seg);
+            float f = seg - k;                       // 0..1 between centre k and k+1
+            float pw = clamp(uPlateauDeg / 90.0, 0.0, 0.49);  // plateau half-width in cell units
+            float mfac = smoothstep(pw, 1.0 - pw, f); // 0 in colour-A plateau, 1 in colour-B plateau
+            c = mix(cd2Color(k), cd2Color(k + 1.0), mfac);
+
+            // ---- global gradient interaction (per sector type) ----
+            vec3 glowAdd = vec3(0.0);
+            if(uGradSat > 0.001){
+              vec2 sp = uv / uRes.y / max(uWaveLen, 0.05);          // aspect-correct, scaled
+              vec2 flow = normalize(vec2(1.0, 1.0)) * (uTime * uWaveSpeed); // drift top-right -> bottom-left
+              float gg = clamp(0.5 + 0.75 * snoise(vec3(sp + flow, uTime * uWaveSpeed * 0.3)), 0.0, 1.0); // 0=blue, 1=magenta
+              float wA = 1.0 - mfac, wB = mfac;      // weights of the two blended sector colours
+              float tA = mod(k, 4.0), tB = mod(k + 1.0, 4.0);
+              float wMag = 0.0, wBlue = 0.0, wWhite = 0.0;
+              if(tA < 0.5) wMag += wA; else if(tA < 1.5) wBlue += wA; else if(tA < 2.5) wWhite += wA; else wBlue += wA;
+              if(tB < 0.5) wMag += wB; else if(tB < 1.5) wBlue += wB; else if(tB < 2.5) wWhite += wB; else wBlue += wB;
+              vec3 gradPure = mix(vec3(0.10,0.22,0.72), vec3(1.0,0.03,0.88), gg); // blue <-> magenta
+              // white always follows the gradient; blue overdrawn on the magenta side; magenta overdrawn on the blue side
+              float shift = (wWhite * (uGradWhiteB * (1.0 - gg) + uGradWhiteM * gg) + wBlue * gg + wMag * (1.0 - gg)) * uGradSat;
+              c = mix(c, gradPure, clamp(shift, 0.0, 1.0));
+              // white sectors glow like metal catching magenta light (concentrated on the magenta side)
+              glowAdd = wWhite * pow(gg, 2.0) * uWhiteGlow * vec3(1.0, 0.45, 0.9);
+            }
+
+            float gy = dot(c, vec3(0.299,0.587,0.114));
+            c = mix(vec3(gy), c, clamp(sat, 0.0, 1.0));   // Saturation slider
+            c += glowAdd;                                 // emissive glow, kept hot (post-saturation)
           } else {
-            // 1-channel disc: luminance drives the palette
-            lum = dot(tex.rgb, vec3(0.299,0.587,0.114));
-            phase += d * 0.15;
+            // 1-channel CD: luminance drives the palette
+            float lum = dot(tex.rgb, vec3(0.299,0.587,0.114));
+            float phase = colPhase + id * 1.7 + d * 0.15;
+            c = colorama(lum, phase, spread, sat, palette);
+            c += pow(lum, 6.0) * 0.6;                 // metallic sheen
           }
-          vec3 c = colorama(lum, phase, spread, sat, palette);
-          if(uColorMode == 0) c += pow(lum, 6.0) * 0.6;   // metallic sheen (1-channel)
           col = mix(col, c, alpha);
         }
       }
@@ -497,7 +647,7 @@
     // uniforms
     const U = {};
     ["uRes","uTime","uTex","uScaleBg","uScaleBtn","uOverlapBg","uOverlapBtn","uOverlapXBg","uOverlapXBtn","uSpreadBg","uSpreadBtn","uSatBg","uSatBtn","uPaletteBg","uPaletteBtn",
-     "uMousePx","uMouseAct","uHoverRot","uHoverCol","uHoverSpr","uHoverSat","uHoverInner","uHoverOuter","uHoverCurve","uRotPhase","uColPhase","uHovRotPhase","uHovColPhase","uBtnRotPhase","uBtnColPhase","uLenX","uLenY","uSideLR","uSideTB","uCenterDark","uShadeStep","uEdgeSoft","uSpeedSpread","uSyncAngle","uColorMode","uBtnPx","uBtnSize","uBtnHover","uBtnRot","uBtnCol","uBtnSpr","uBtnSat"]
+     "uMousePx","uMouseAct","uHoverRot","uHoverCol","uHoverSpr","uHoverSat","uHoverInner","uHoverOuter","uHoverCurve","uRotPhase","uColPhase","uHovRotPhase","uHovColPhase","uBtnRotPhase","uBtnColPhase","uLenX","uLenY","uSideLR","uSideTB","uCenterDark","uShadeStep","uEdgeSoft","uSpeedSpread","uSyncAngle","uSquare","uColorMode","uPlateauDeg","uGradSat","uWaveLen","uWaveSpeed","uGradWhiteB","uGradWhiteM","uWhiteGlow","uBtnPx","uBtnSize","uBtnHover","uBtnRot","uBtnCol","uBtnSpr","uBtnSat"]
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
 
     // textures: one per profile segment (cd = 1-channel, cd2 = 2-channel)
@@ -526,8 +676,8 @@
     const BTN_ASPECT = 0.36;   // button height = width * aspect
     const state = {
       paused: false,
-      lenX: 0.255, lenY: 0.08, sideLR: true, sideTB: false,
-      centerDark: 1.0, shadeStep: 0.06, edgeSoft: 3.0, speedSpread: 2.0, syncAngle: 0,
+      lenX: 0.255, lenY: 0.08, sideLR: true, sideTB: false, square: false,
+      centerDark: 1.0, shadeStep: 0.06, edgeSoft: 3.0, speedSpread: 2.0, randomSpin: 0, plateauDeg: 15, gradSat: 0, waveLen: 0.8, waveSpeed: 0.06, gradWhiteB: 1, gradWhiteM: 1, whiteGlow: 0, bloom: 0, syncAngle: 0,
       btnSize: 260, btnRot: 1.12, btnCol: 0.63, btnSpr: 1.00, btnSat: 0.21,
       hoverRot: 0.0, hoverCol: 0.0, hoverSpr: 0.0, hoverSat: 0.54,
       hoverInner: 0, hoverOuter: 202, hoverCurve: 0,
@@ -569,10 +719,10 @@
     }
     // ---- per-side foil params: Global / BG / Button (global overrides children when ticked) ----
     const FOIL_PARAMS = [
-      { key:"scale",    label:"Scale size",  min:20,   max:260, step:1,    def:40,   dbg:32,   dbtn:46,   dov:false },
-      { key:"overlap",  label:"Overlap V",   min:0.35, max:1.2, step:0.01, def:0.60, dbg:1.00, dbtn:0.84, dov:false },
-      { key:"overlapX", label:"Overlap H",   min:0.35, max:1.2, step:0.01, def:0.92, dbg:1.15, dbtn:1.03, dov:false },
-      { key:"rot",     label:"Rotation speed",   min:0,    max:3,   step:0.01, def:0.60 },
+      { key:"scale",    label:"Scale size",  min:6,    max:260, step:1,    def:40,   dbg:32,   dbtn:46,   dov:false },
+      { key:"overlap",  label:"Overlap V",   min:0.35, max:2.5, step:0.01, def:0.60, dbg:1.00, dbtn:0.84, dov:false },
+      { key:"overlapX", label:"Overlap H",   min:0.35, max:2.5, step:0.01, def:0.92, dbg:1.15, dbtn:1.03, dov:false },
+      { key:"rot",     label:"Rotation speed",   min:0,    max:6,   step:0.01, def:0.60 },
       { key:"color",   label:"Color flow speed", min:0,    max:2,   step:0.01, def:0.35 },
       { key:"spread",  label:"Color spread",     min:0.2,  max:3,   step:0.01, def:1.30 },
       { key:"sat",     label:"Saturation",       min:0,    max:1.6, step:0.01, def:0.22, dbg:0.40, dbtn:0.40 },
@@ -639,7 +789,7 @@
         ovr.addEventListener("change", applyVis);
         applyVis();
         host.appendChild(wrap);
-        FOIL_REGISTRY.push({ P, ovr, ctls, def });
+        FOIL_REGISTRY.push({ P, ovr, ctls, def, wrap });
       });
     })();
     function resetFoil(){
@@ -660,13 +810,24 @@
     (function(){
       const lr = document.getElementById("sideLR");
       const tb = document.getElementById("sideTB");
+      const sq = document.getElementById("squareGrid");
       lr.addEventListener("change", () => state.sideLR = lr.checked);
       tb.addEventListener("change", () => state.sideTB = tb.checked);
-      state.sideLR = lr.checked; state.sideTB = tb.checked;
+      sq.addEventListener("change", () => state.square = sq.checked);
+      state.sideLR = lr.checked; state.sideTB = tb.checked; state.square = sq.checked;
     })();
     bind("shadeStep", "shadeStep", "oStep", v => v.toFixed(3));
     bind("edgeSoft", "edgeSoft", "oEdgeSoft", v => v.toFixed(2));
     bind("speedSpread", "speedSpread", "oSpeedSpread", v => v.toFixed(2));
+    bind("randomSpin", "randomSpin", "oRandomSpin", v => v.toFixed(2));
+    bind("plateauDeg", "plateauDeg", "oPlateau", v => v.toFixed(0));
+    bind("gradSat", "gradSat", "oGradSat", v => v.toFixed(2));
+    bind("gradWhiteB", "gradWhiteB", "oGradWhiteB", v => v.toFixed(2));
+    bind("gradWhiteM", "gradWhiteM", "oGradWhiteM", v => v.toFixed(2));
+    bind("whiteGlow", "whiteGlow", "oWhiteGlow", v => v.toFixed(2));
+    bind("bloom", "bloom", "oBloom", v => v.toFixed(2));
+    bind("waveLen", "waveLen", "oWaveLen", v => v.toFixed(2));
+    bind("waveSpeed", "waveSpeed", "oWaveSpeed", v => v.toFixed(3));
     bind("btnRot", "btnRot", "oBtnRot", v => v.toFixed(2));
     bind("btnCol", "btnCol", "oBtnCol", v => v.toFixed(2));
     bind("btnSpr", "btnSpr", "oBtnSpr", v => v.toFixed(2));
@@ -715,8 +876,10 @@
       Object.keys(state.foil).forEach(k => cfg.foil[k] = Object.assign({}, state.foil[k]));
       cfg.hoverCurve = state.hoverCurve;
       cfg.sideLR = state.sideLR;
+      cfg.square = state.square;
       cfg.sideTB = state.sideTB;
       cfg.btnStyle = state.btnStyle;
+      cfg.syncAngle = state.syncAngle;
       return cfg;
     }
     function applyConfig(cfg){
@@ -734,8 +897,14 @@
       }
       if(cfg.hoverCurve !== undefined){ state.hoverCurve = cfg.hoverCurve; document.getElementById("hoverCurve").value = String(cfg.hoverCurve); }
       if(cfg.sideLR !== undefined){ state.sideLR = cfg.sideLR; document.getElementById("sideLR").checked = cfg.sideLR; }
+      if(cfg.square !== undefined){ state.square = cfg.square; const sc = document.getElementById("squareGrid"); if(sc) sc.checked = cfg.square; }
       if(cfg.sideTB !== undefined){ state.sideTB = cfg.sideTB; document.getElementById("sideTB").checked = cfg.sideTB; }
       if(cfg.btnStyle !== undefined){ state.btnStyle = cfg.btnStyle; btnStyleSel.value = cfg.btnStyle; applyBtnStyle(); }
+      if(cfg.syncAngle !== undefined){
+        state.syncAngle = cfg.syncAngle;
+        const sb = document.getElementById("syncAngle");
+        if(sb){ sb.textContent = state.syncAngle ? "Unsync angles" : "Sync angles"; sb.style.background = state.syncAngle ? "#2a3550" : ""; }
+      }
     }
     function copyConfig(){
       const cfg = getConfig();
@@ -758,10 +927,34 @@
       1: { seg:"cd",  colorMode:0, cfg:null },
       2: { seg:"cd2", colorMode:1, cfg:null }
     };
-    let activeProfile = 1;
-    // seed both profiles from the current (default) config so they start independent
-    profiles[1].cfg = getConfig();
-    profiles[2].cfg = getConfig();
+    let activeProfile = 2;                 // start on CD2 by default
+    profiles[1].cfg = getConfig();         // seed profile 1 from current (default) config
+    profiles[2].cfg = {                     // CD2 tuned config
+      lenX:0.255, lenY:0.08, centerDark:1, shadeStep:0.06, edgeSoft:3,
+      speedSpread:0, randomSpin:0, plateauDeg:10, gradSat:0.81, waveLen:1.15, waveSpeed:0.375, gradWhiteB:0.23, gradWhiteM:0.08, whiteGlow:1, bloom:1,
+      btnRot:1.12, btnCol:0.63, btnSpr:1, btnSat:0.21,
+      hoverRot:0, hoverCol:0, hoverSpr:0, hoverSat:0.54,
+      hoverInner:0, hoverOuter:202, btnSize:260,
+      foil:{
+        scale:{override:false,g:40,bg:30,btn:46},
+        overlap:{override:false,g:0.6,bg:1.3,btn:0.84},
+        overlapX:{override:false,g:0.92,bg:1.3,btn:1.03},
+        rot:{override:true,g:4.52,bg:0.6,btn:0.6},
+        color:{override:true,g:0.35,bg:0.35,btn:0.35},
+        spread:{override:true,g:1.3,bg:1.3,btn:1.3},
+        sat:{override:true,g:1,bg:1,btn:1},
+        palette:{override:true,g:3,bg:0,btn:0}
+      },
+      hoverCurve:0, sideLR:true, sideTB:false, square:true, btnStyle:"crystal", syncAngle:1
+    };
+    // colour-flow-speed / colour-spread sliders are meaningless in the 2-colour CD2 profile
+    function applyProfileVisibility(){
+      const cd2 = (state.colorMode === 1);
+      FOIL_REGISTRY.forEach(r => {
+        if(r.P.key === "color" || r.P.key === "spread") r.wrap.hidden = cd2;
+      });
+      ["rowPlateau","rowGradSat","rowGradWhiteB","rowGradWhiteM","rowWhiteGlow","rowBloom","rowWaveLen","rowWaveSpeed"].forEach(id => { const el = document.getElementById(id); if(el) el.hidden = !cd2; });
+    }
     function switchProfile(id){
       if(id === activeProfile) return;
       profiles[activeProfile].cfg = getConfig();        // save what we're leaving
@@ -769,9 +962,39 @@
       const p = profiles[id];
       state.seg = p.seg; state.colorMode = p.colorMode; // swap texture + shader mode
       if(p.cfg) applyConfig(p.cfg);                     // restore this profile's values
+      applyProfileVisibility();
     }
     const profileSel = document.getElementById("profileSel");
     profileSel.addEventListener("change", () => switchProfile(parseInt(profileSel.value,10)));
+    // start on CD2 by default
+    profileSel.value = "2";
+    state.seg = profiles[2].seg; state.colorMode = profiles[2].colorMode;
+    applyConfig(profiles[2].cfg);
+    applyProfileVisibility();
+
+    // ---- settings search: highlight + jump to first match, optional filter ----
+    (function(){
+      const searchBox = document.getElementById("searchBox");
+      const searchFilter = document.getElementById("searchFilter");
+      const panelEl = document.getElementById("panel");
+      function runSearch(){
+        const q = searchBox.value.trim().toLowerCase();
+        const rows = panelEl.querySelectorAll(".row, .fp");
+        let first = null;
+        rows.forEach(el => {
+          if(el.contains(searchBox)){ el.classList.remove("filtered", "search-hit"); return; }
+          el.classList.remove("search-hit");
+          if(q === ""){ el.classList.remove("filtered"); return; }
+          const match = el.textContent.toLowerCase().includes(q);
+          if(match){ el.classList.add("search-hit"); if(!first) first = el; }
+          if(searchFilter.checked) el.classList.toggle("filtered", !match);
+          else el.classList.remove("filtered");
+        });
+        if(first) first.scrollIntoView({ block:"nearest" });
+      }
+      searchBox.addEventListener("input", runSearch);
+      searchFilter.addEventListener("change", runSearch);
+    })();
 
     const panel = document.getElementById("panel");
     const toggle = document.getElementById("toggle");
@@ -788,6 +1011,8 @@
     });
 
     window.addEventListener("keydown", e => {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
       if (e.key === "h" || e.key === "H") panel.classList.toggle("hidden");
       if (e.code === "Space") { e.preventDefault(); pauseBtn.click(); }
     });
@@ -800,6 +1025,79 @@
     window.addEventListener("mouseleave", () => state.mouseActT = 0);
     window.addEventListener("mouseout", e => { if (!e.relatedTarget) state.mouseActT = 0; });
 
+    // ---------- Bloom (HDR glow bleed) ----------
+    const floatExt = gl.getExtension("EXT_color_buffer_float");
+    let bloomOK = !!floatExt;
+    const BLUR_FRAG = `#version 300 es
+    precision highp float;
+    out vec4 o;
+    uniform sampler2D uSrc;
+    uniform vec2 uTexel;
+    uniform vec2 uDir;
+    uniform float uExtract;
+    uniform float uRadius;
+    void main(){
+      vec2 uv = gl_FragCoord.xy * uTexel;
+      vec2 st = uDir * uTexel * uRadius;
+      vec3 cc = texture(uSrc, uv).rgb;
+      if(uExtract > 0.5) cc = max(cc - 1.0, 0.0);
+      vec3 sum = cc * 0.227027;
+      vec3 a, b;
+      a = texture(uSrc, uv + st).rgb;       b = texture(uSrc, uv - st).rgb;       if(uExtract>0.5){a=max(a-1.0,0.0);b=max(b-1.0,0.0);} sum += (a+b) * 0.1945946;
+      a = texture(uSrc, uv + st*2.0).rgb;   b = texture(uSrc, uv - st*2.0).rgb;   if(uExtract>0.5){a=max(a-1.0,0.0);b=max(b-1.0,0.0);} sum += (a+b) * 0.1216216;
+      a = texture(uSrc, uv + st*3.0).rgb;   b = texture(uSrc, uv - st*3.0).rgb;   if(uExtract>0.5){a=max(a-1.0,0.0);b=max(b-1.0,0.0);} sum += (a+b) * 0.0540540;
+      a = texture(uSrc, uv + st*4.0).rgb;   b = texture(uSrc, uv - st*4.0).rgb;   if(uExtract>0.5){a=max(a-1.0,0.0);b=max(b-1.0,0.0);} sum += (a+b) * 0.0162162;
+      o = vec4(sum, 1.0);
+    }`;
+    const COMP_FRAG = `#version 300 es
+    precision highp float;
+    out vec4 o;
+    uniform sampler2D uScene;
+    uniform sampler2D uBloom;
+    uniform vec2 uTexel;
+    uniform float uInt;
+    void main(){
+      vec2 uv = gl_FragCoord.xy * uTexel;
+      o = vec4(texture(uScene, uv).rgb + texture(uBloom, uv).rgb * uInt, 1.0);
+    }`;
+    function makePostProg(fsrc){
+      const p = gl.createProgram();
+      gl.attachShader(p, compile(gl.VERTEX_SHADER, VERT));
+      gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fsrc));
+      gl.linkProgram(p);
+      if(!gl.getProgramParameter(p, gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(p)); throw new Error("post link error"); }
+      return p;
+    }
+    let blurProg, compProg; const BU = {}, CU = {};
+    let sceneFBO = null, blurA = null, blurB = null;
+    if(bloomOK){
+      blurProg = makePostProg(BLUR_FRAG);
+      compProg = makePostProg(COMP_FRAG);
+      ["uSrc","uTexel","uDir","uExtract","uRadius"].forEach(n => BU[n] = gl.getUniformLocation(blurProg, n));
+      ["uScene","uBloom","uTexel","uInt"].forEach(n => CU[n] = gl.getUniformLocation(compProg, n));
+    }
+    function makeFBO(w, h){
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.FLOAT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      return { fbo, tex, w, h };
+    }
+    function resizeBloom(){
+      if(!bloomOK) return;
+      const w = canvas.width, h = canvas.height;
+      if(sceneFBO && sceneFBO.w === w && sceneFBO.h === h) return;
+      [sceneFBO, blurA, blurB].forEach(f => { if(f){ gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex); } });
+      sceneFBO = makeFBO(w, h); blurA = makeFBO(w, h); blurB = makeFBO(w, h);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
     // ---------- Resize ----------
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     function resize() {
@@ -810,6 +1108,7 @@
         canvas.width = w; canvas.height = h;
       }
       gl.viewport(0, 0, canvas.width, canvas.height);
+      resizeBloom();
     }
     window.addEventListener("resize", resize);
     resize();
@@ -837,12 +1136,19 @@
       const rotBg = eff("rot","bg"),   rotBtn = eff("rot","btn");
       const colBg = eff("color","bg"), colBtn = eff("color","btn");
 
+      // synchronized random spin: one smooth wandering rate shared by all discs (can reverse)
+      let spinMod = 1.0;
+      if(state.randomSpin > 0.0001){
+        const w = Math.sin(t*0.7) * 0.6 + Math.sin(t*0.31 + 1.3) * 0.35 + Math.sin(t*1.13 + 2.1) * 0.25;
+        spinMod = (1.0 - state.randomSpin) + state.randomSpin * w * 1.6;
+      }
+
       // accumulate continuous phases: changing a speed alters velocity, not past phase (no jumps)
-      rotPhase    += dt * rotBg;
+      rotPhase    += dt * rotBg * spinMod;
       colPhase    += dt * colBg;
       hovRotPhase += dt * rotBg * state.hoverRot;
       hovColPhase += dt * colBg * state.hoverCol;
-      btnRotPhase += dt * rotBtn * (1.0 + btnH * state.btnRot);
+      btnRotPhase += dt * rotBtn * (1.0 + btnH * state.btnRot) * spinMod;
       btnColPhase += dt * colBtn * (1.0 + btnH * state.btnCol);
 
       gl.useProgram(prog);
@@ -851,6 +1157,13 @@
       gl.bindTexture(gl.TEXTURE_2D, textures[state.seg] || textures.cd);
       gl.uniform1i(U.uTex, 0);
       gl.uniform1i(U.uColorMode, state.colorMode);
+      gl.uniform1f(U.uPlateauDeg, state.plateauDeg);
+      gl.uniform1f(U.uGradSat, state.gradSat);
+      gl.uniform1f(U.uWaveLen, state.waveLen);
+      gl.uniform1f(U.uWaveSpeed, state.waveSpeed);
+      gl.uniform1f(U.uGradWhiteB, state.gradWhiteB);
+      gl.uniform1f(U.uGradWhiteM, state.gradWhiteM);
+      gl.uniform1f(U.uWhiteGlow, state.whiteGlow);
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform1f(U.uTime, t);
       gl.uniform1f(U.uScaleBg,   eff("scale","bg")  * dpr);
@@ -888,6 +1201,7 @@
       gl.uniform1f(U.uShadeStep, state.shadeStep);
       gl.uniform1f(U.uEdgeSoft, state.edgeSoft);
       gl.uniform1f(U.uSpeedSpread, state.speedSpread);
+      gl.uniform1f(U.uSquare, state.square ? 1 : 0);
       gl.uniform1f(U.uSyncAngle, state.syncAngle);
       gl.uniform2f(U.uBtnPx, canvas.width * 0.5, canvas.height * 0.5);
       const bw = state.btnSize * dpr, bh = state.btnSize * BTN_ASPECT * dpr;
@@ -898,7 +1212,43 @@
       gl.uniform1f(U.uBtnSpr, state.btnSpr);
       gl.uniform1f(U.uBtnSat, state.btnSat);
 
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      const useBloom = bloomOK && state.bloom > 0.001 && state.whiteGlow > 0.001 && state.gradSat > 0.001;
+      if(useBloom){
+        const W = canvas.width, H = canvas.height;
+        // 1) scene (with HDR glow) -> sceneFBO
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fbo);
+        gl.viewport(0, 0, W, H);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // 2) extract (>1) + horizontal blur -> blurA
+        gl.useProgram(blurProg);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blurA.fbo);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex); gl.uniform1i(BU.uSrc, 0);
+        gl.uniform2f(BU.uTexel, 1.0 / W, 1.0 / H);
+        gl.uniform2f(BU.uDir, 1.0, 0.0);
+        gl.uniform1f(BU.uExtract, 1.0);
+        gl.uniform1f(BU.uRadius, 3.0 * dpr);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // 3) vertical blur -> blurB
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blurB.fbo);
+        gl.bindTexture(gl.TEXTURE_2D, blurA.tex); gl.uniform1i(BU.uSrc, 0);
+        gl.uniform2f(BU.uDir, 0.0, 1.0);
+        gl.uniform1f(BU.uExtract, 0.0);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // 4) composite scene + bloom -> screen
+        gl.useProgram(compProg);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex); gl.uniform1i(CU.uScene, 0);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, blurB.tex); gl.uniform1i(CU.uBloom, 1);
+        gl.uniform2f(CU.uTexel, 1.0 / canvas.width, 1.0 / canvas.height);
+        gl.uniform1f(CU.uInt, state.bloom);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.activeTexture(gl.TEXTURE0);
+      } else {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
 
       if (!state.paused) requestAnimationFrame(loop);
     }

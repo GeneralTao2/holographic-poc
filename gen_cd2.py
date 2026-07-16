@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 
 N = 512
-SPLITS = 8            # colour repeats around the disc
+SPLITS = 2            # colour repeats around the disc (2 = two segments per colour)
 PHASE_DEG = 0.0       # rotate the pattern
 
 xs = (np.arange(N) + 0.5) / N * 2.0 - 1.0
