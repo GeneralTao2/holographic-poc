@@ -14,19 +14,22 @@
   #gl { display: block; width: 100vw; height: 100vh; }
 
   /* Control panel */
-  #panel {
-    position: fixed; top: 14px; right: 14px; width: 250px;
+  #panel, #panelLeft {
+    position: fixed; top: 14px; width: 250px;
     max-height: calc(100vh - 28px); overflow-y: auto;
     background: rgba(10,12,20,0.72); backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
     padding: 14px 14px 10px; color: #dfe4f0; font-size: 12px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.5); transition: transform .25s ease, opacity .25s ease;
   }
-  #panel::-webkit-scrollbar { width: 8px; }
-  #panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
+  #panel { right: 14px; }
+  #panelLeft { left: 14px; }
+  #panel::-webkit-scrollbar, #panelLeft::-webkit-scrollbar { width: 8px; }
+  #panel::-webkit-scrollbar-thumb, #panelLeft::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
   #panel.hidden { transform: translateX(300px); opacity: 0; }
-  #panel h1 { font-size: 12px; margin: 0 0 10px; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.8; }
-  #panel .sub { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.5; margin: 12px 0 8px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
+  #panelLeft.hidden { transform: translateX(-300px); opacity: 0; }
+  #panel h1, #panelLeft h1 { font-size: 12px; margin: 0 0 10px; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.8; }
+  #panel .sub, #panelLeft .sub { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.5; margin: 12px 0 8px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
   .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
   .row .top { display: flex; justify-content: space-between; align-items: baseline; }
   .row label { opacity: 0.8; }
@@ -108,11 +111,18 @@
   .hint { opacity:0.45; font-size:10px; margin-top:4px; }
   #searchBox { width:100%; background:#11131d; color:#dfe4f0; border:1px solid rgba(255,255,255,.15); border-radius:6px; padding:5px 7px; font-family:inherit; font-size:11px; }
   .filtered { display:none !important; }
+  [hidden] { display: none !important; }
   .search-hit { outline:1px solid #7ad0ff; outline-offset:2px; border-radius:6px; }
+  #stats { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none;
+    font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; font-size: 11px; line-height: 1.5;
+    color: #bfe9ff; background: rgba(6,8,14,0.62); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 6px 9px; white-space: pre; backdrop-filter: blur(6px);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
 </style>
 </head>
 <body>
   <canvas id="gl"></canvas>
+  <div id="stats"></div>
   <button id="foilBtn" class="mode-crystal"><span>Sign in with Google</span></button>
 
   <div id="panel">
@@ -121,8 +131,8 @@
     <div class="row">
       <div class="top"><label>Profile</label></div>
       <select id="profileSel">
-        <option value="1">1 · CD (1-channel)</option>
-        <option value="2">2 · CD2 (2-channel)</option>
+        <option value="1">1 · Luminance foil (1-channel)</option>
+        <option value="2">2 · Angular sectors (2-channel)</option>
       </select>
     </div>
 
@@ -135,24 +145,79 @@
     <p class="note">Each setting has Global · BG · Button. Untick “global” to tune the page background and the button separately.</p>
     <div id="foilParams"></div>
 
+    <div class="row" id="rowCd2Palette">
+      <div class="top"><label>Palette</label></div>
+      <select id="cd2Palette">
+        <option value="0">Magenta / Blue</option>
+        <option value="1">Gold / Teal</option>
+        <option value="2">Orange / Purple</option>
+        <option value="3">Pink / Cyan</option>
+        <option value="4">Red / Blue</option>
+        <option value="5">Green / Purple</option>
+      </select>
+    </div>
+
     <div class="row">
       <label class="chk"><input type="checkbox" id="squareGrid" /> Square grid layout</label>
     </div>
 
+    <div class="btns">
+      <button id="pause">Pause</button>
+      <button id="hidePanel">Hide UI</button>
+    </div>
+    <div class="btns">
+      <button id="resetAll">Reset all</button>
+      <button id="copyCfg">Copy config</button>
+    </div>
+    <div class="btns">
+      <button id="syncAngle">Sync angles</button>
+      <button id="copyLink">Copy link</button>
+    </div>
+    <div class="hint">Double-click a value or slider to reset it · H: toggle UI · Space: pause</div>
+  </div>
+
+  <div id="panelLeft">
+    <h1>Scene &amp; Button</h1>
+
     <div class="sub">Scene shading</div>
 
     <div class="row">
+      <div class="top"><label>Mask pattern</label></div>
+      <select id="maskPattern">
+        <option value="0">Classic bands</option>
+        <option value="1">Vertical stripes</option>
+        <option value="2">Diagonal stripes</option>
+        <option value="3">Grid cells</option>
+        <option value="4">Dots</option>
+        <option value="5">Waves</option>
+        <option value="6">Rings</option>
+        <option value="7">Organic blobs</option>
+        <option value="8">Veins / branches</option>
+      </select>
+    </div>
+
+    <div class="row" id="rowMaskScale">
+      <div class="top"><label>Mask scale</label><output id="oMaskScale">0.25</output></div>
+      <input id="maskScale" type="range" min="0.05" max="1" step="0.01" value="0.25" />
+    </div>
+
+    <div class="row" id="rowMaskSoft">
+      <div class="top"><label>Mask softness</label><output id="oMaskSoft">0.040</output></div>
+      <input id="maskSoft" type="range" min="0.005" max="0.3" step="0.005" value="0.04" />
+    </div>
+
+    <div class="row" id="rowSideShadows">
       <div class="top"><label>Side shadows</label></div>
       <label class="chk"><input type="checkbox" id="sideLR" checked /> Left / Right</label>
       <label class="chk"><input type="checkbox" id="sideTB" /> Top / Bottom</label>
     </div>
 
-    <div class="row">
+    <div class="row" id="rowLenX">
       <div class="top"><label>Shadow length L/R</label><output id="oLenX">0.255</output></div>
       <input id="lenX" type="range" min="0" max="0.5" step="0.005" value="0.255" />
     </div>
 
-    <div class="row">
+    <div class="row" id="rowLenY">
       <div class="top"><label>Shadow length T/B</label><output id="oLenY">0.080</output></div>
       <input id="lenY" type="range" min="0" max="0.5" step="0.005" value="0.08" />
     </div>
@@ -162,14 +227,14 @@
       <input id="center" type="range" min="0" max="1" step="0.01" value="1.00" />
     </div>
 
-    <div class="row">
+    <div class="row" id="rowShadeStep">
       <div class="top"><label>Shade step</label><output id="oStep">0.06</output></div>
       <input id="shadeStep" type="range" min="0.01" max="0.45" step="0.005" value="0.06" />
     </div>
 
     <div class="row">
-      <div class="top"><label>Segment edge softness</label><output id="oEdgeSoft">3.00</output></div>
-      <input id="edgeSoft" type="range" min="0.5" max="20" step="0.1" value="3.0" />
+      <div class="top"><label>Segment edge softness</label><output id="oEdgeSoft">1.70</output></div>
+      <input id="edgeSoft" type="range" min="0.5" max="20" step="0.1" value="1.7" />
     </div>
 
     <div class="row">
@@ -202,9 +267,18 @@
       <input id="gradWhiteM" type="range" min="0" max="2" step="0.01" value="1" />
     </div>
 
+    <div class="row" id="rowBlueLevel">
+      <div class="top"><label>Blue brightness</label><output id="oBlueLevel">1.00</output></div>
+      <input id="blueLevel" type="range" min="0" max="1.5" step="0.01" value="1" />
+    </div>
+
     <div class="row" id="rowWhiteGlow">
       <div class="top"><label>White glow (magenta)</label><output id="oWhiteGlow">0.00</output></div>
       <input id="whiteGlow" type="range" min="0" max="3" step="0.01" value="0" />
+    </div>
+
+    <div class="row" id="rowBloomOn">
+      <label class="chk"><input type="checkbox" id="bloomOn" checked /> Bloom</label>
     </div>
 
     <div class="row" id="rowBloom">
@@ -238,6 +312,11 @@
     </div>
 
     <div class="row">
+      <div class="top"><label>Btn box margin</label><output id="oBtnMargin">0.025</output></div>
+      <input id="btnMargin" type="range" min="0" max="0.3" step="0.005" value="0.025" />
+    </div>
+
+    <div class="row">
       <div class="top"><label>Btn hover → rotation</label><output id="oBtnRot">1.12</output></div>
       <input id="btnRot" type="range" min="0" max="5" step="0.01" value="1.12" />
     </div>
@@ -257,6 +336,7 @@
       <input id="btnSat" type="range" min="0" max="2" step="0.01" value="0.21" />
     </div>
 
+    <div id="mouseSection">
     <div class="sub">Mouse interaction</div>
 
     <div class="row">
@@ -299,19 +379,7 @@
         <option value="4">Sharp</option>
       </select>
     </div>
-
-    <div class="btns">
-      <button id="pause">Pause</button>
-      <button id="hidePanel">Hide UI</button>
-    </div>
-    <div class="btns">
-      <button id="resetAll">Reset all</button>
-      <button id="copyCfg">Copy config</button>
-    </div>
-    <div class="btns">
-      <button id="syncAngle">Sync angles</button>
-    </div>
-    <div class="hint">Double-click a value or slider to reset it · H: toggle UI · Space: pause</div>
+    </div><!-- /#mouseSection -->
   </div>
   <div id="toggle" title="Show controls">⚙</div>
 
@@ -368,6 +436,11 @@
     uniform float uSideTB;    // enable top/bottom shadows (0/1)
     uniform float uCenterDark;// center darkening
     uniform float uShadeStep; // dark-to-effect transition width (0..0.5)
+    uniform int   uMaskPattern;// mask shape (0 = classic bands)
+    uniform float uMaskScale;  // mask feature size
+    uniform float uMaskSoft;   // mask edge softness (shadow width)
+    uniform float uBtnShade;   // button dark-rectangle shadow transition length
+    uniform float uBtnMargin;  // extra dark-box size around the button (fraction of height)
     uniform float uEdgeSoft;  // segment edge softness (px)
     uniform float uSpeedSpread;// per-disc rotation speed variation (0 = uniform)
     uniform float uSyncAngle;  // 1 = drop per-disc angle offset (align all discs)
@@ -380,6 +453,8 @@
     uniform float uGradWhiteB;  // blue-side gradient influence on white sectors
     uniform float uGradWhiteM;  // magenta-side gradient influence on white sectors
     uniform float uWhiteGlow;   // white sectors' metallic glow under magenta light
+    uniform float uBlueLevel;   // blue sector brightness (lower = darker)
+    uniform int   uCd2Palette;  // CD2 colour set
     uniform vec2  uBtnPx;     // button center (device px)
     uniform vec2  uBtnSize;   // button width/height (device px)
     uniform float uBtnHover;  // 0..1 hover on button
@@ -416,13 +491,33 @@
     // deterministic pseudo random from cell id
     float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 
-    // CD2 sector colours by centre index: magenta, blue, white, blue (repeat)
+    // CD2 colour set: A = hot pole, B = cool middle (x brightness)
+    vec3 cd2ColA(){
+      int p = uCd2Palette;
+      if(p==1) return vec3(1.0, 0.72, 0.15);   // gold
+      if(p==2) return vec3(1.0, 0.42, 0.08);   // orange
+      if(p==3) return vec3(1.0, 0.28, 0.60);   // pink
+      if(p==4) return vec3(1.0, 0.15, 0.20);   // red
+      if(p==5) return vec3(0.25, 0.90, 0.45);  // green
+      return vec3(1.0, 0.03, 0.88);            // magenta
+    }
+    vec3 cd2ColB(){
+      int p = uCd2Palette;
+      vec3 b = vec3(0.10, 0.22, 0.72);         // blue
+      if(p==1) b = vec3(0.0, 0.45, 0.50);      // teal
+      else if(p==2) b = vec3(0.32, 0.08, 0.66);// purple
+      else if(p==3) b = vec3(0.10, 0.70, 0.95);// cyan
+      else if(p==4) b = vec3(0.12, 0.28, 1.0); // blue
+      else if(p==5) b = vec3(0.45, 0.12, 0.75);// purple
+      return b * uBlueLevel;
+    }
+    // CD2 sector colours by centre index: A, B, white, B (repeat)
     vec3 cd2Color(float i){
       float m = mod(i, 4.0);
-      if(m < 0.5) return vec3(1.0, 0.03, 0.88);   // magenta
-      if(m < 1.5) return vec3(0.10, 0.22, 0.72);  // blue (darker)
-      if(m < 2.5) return vec3(1.0);               // white
-      return vec3(0.10, 0.22, 0.72);              // blue (darker)
+      if(m < 0.5) return cd2ColA();   // hot pole (+)
+      if(m < 1.5) return cd2ColB();   // cool middle (2 pairs)
+      if(m < 2.5) return vec3(1.0);   // white
+      return cd2ColB();               // cool middle
     }
 
     // ---- simplex (barycentric) noise - Ashima Arts / Stefan Gustavson ----
@@ -528,12 +623,12 @@
               float wMag = 0.0, wBlue = 0.0, wWhite = 0.0;
               if(tA < 0.5) wMag += wA; else if(tA < 1.5) wBlue += wA; else if(tA < 2.5) wWhite += wA; else wBlue += wA;
               if(tB < 0.5) wMag += wB; else if(tB < 1.5) wBlue += wB; else if(tB < 2.5) wWhite += wB; else wBlue += wB;
-              vec3 gradPure = mix(vec3(0.10,0.22,0.72), vec3(1.0,0.03,0.88), gg); // blue <-> magenta
+              vec3 gradPure = mix(cd2ColB(), cd2ColA(), gg); // cool <-> hot
               // white always follows the gradient; blue overdrawn on the magenta side; magenta overdrawn on the blue side
               float shift = (wWhite * (uGradWhiteB * (1.0 - gg) + uGradWhiteM * gg) + wBlue * gg + wMag * (1.0 - gg)) * uGradSat;
               c = mix(c, gradPure, clamp(shift, 0.0, 1.0));
               // white sectors glow like metal catching magenta light (concentrated on the magenta side)
-              glowAdd = wWhite * pow(gg, 2.0) * uWhiteGlow * vec3(1.0, 0.45, 0.9);
+              glowAdd = wWhite * pow(gg, 2.0) * uWhiteGlow * mix(vec3(1.0), cd2ColA(), 0.5);
             }
 
             float gy = dot(c, vec3(0.299,0.587,0.114));
@@ -550,6 +645,39 @@
         }
       }
       return col;
+    }
+
+    // ---- mask patterns: return 1 where the effect shows, 0 (dark) elsewhere ----
+    float maskField(int pat, vec2 frag){
+      vec2 q = frag / uRes.y;                    // aspect-corrected (height units)
+      vec2 c = (frag - 0.5 * uRes) / uRes.y;     // centred
+      float scale = max(uMaskScale, 0.02);
+      float soft  = max(uMaskSoft, 0.001);
+      float v = 1.0;                             // 0 = visible centre, 1 = dark
+      if(pat == 1){                              // vertical stripes
+        v = abs(fract(q.x / scale) - 0.5) * 2.0;
+      } else if(pat == 2){                       // diagonal stripes
+        v = abs(fract((q.x + q.y) / scale) - 0.5) * 2.0;
+      } else if(pat == 3){                       // grid cells
+        float vx = abs(fract(q.x / scale) - 0.5) * 2.0;
+        float vy = abs(fract(q.y / scale) - 0.5) * 2.0;
+        v = max(vx, vy);
+      } else if(pat == 4){                       // dots
+        vec2 cc = fract(q / scale) - 0.5;
+        v = length(cc) * 2.0;
+      } else if(pat == 5){                       // waves
+        float x = q.x + 0.18 * scale * sin(q.y * 6.2831 / scale + uTime * 0.3);
+        v = abs(fract(x / scale) - 0.5) * 2.0;
+      } else if(pat == 6){                       // rings
+        v = abs(fract(length(c) / scale) - 0.5) * 2.0;
+      } else if(pat == 7){                       // organic blobs
+        float n = snoise(vec3(q / scale, uTime * 0.05));
+        v = 0.5 - n * 0.9;
+      } else if(pat == 8){                       // veins / branches
+        float n = snoise(vec3(q / (scale * 1.5), uTime * 0.04));
+        v = abs(n) * 3.0;
+      }
+      return smoothstep(0.5 + soft, 0.5 - soft, v);
     }
 
     void main(){
@@ -573,27 +701,34 @@
                       uColPhase + prox * uHovColPhase,
                       sprE, satE, uOverlapBg, uOverlapXBg, uPaletteBg, vec3(0.04,0.045,0.06));
 
-      // ---- side shadows: 100% black bands, length-controlled, toggleable per axis ----
+      // ---- mask: confine the effect to a pattern; transitions are shadows ----
       float st = max(uShadeStep, 0.001);
-      float fx = gl_FragCoord.x / uRes.x;
-      float fy = gl_FragCoord.y / uRes.y;
-      float sh = 1.0;
-      if(uSideLR > 0.5){
-        sh *= smoothstep(uLenX, uLenX + st, fx);              // left band
-        sh *= smoothstep(1.0 - uLenX, 1.0 - uLenX - st, fx);  // right band
+      float mask;
+      if(uMaskPattern == 0){
+        // classic bands (side shadows), length-controlled, toggleable per axis
+        float fx = gl_FragCoord.x / uRes.x;
+        float fy = gl_FragCoord.y / uRes.y;
+        float sh = 1.0;
+        if(uSideLR > 0.5){
+          sh *= smoothstep(uLenX, uLenX + st, fx);              // left band
+          sh *= smoothstep(1.0 - uLenX, 1.0 - uLenX - st, fx);  // right band
+        }
+        if(uSideTB > 0.5){
+          sh *= smoothstep(uLenY, uLenY + st, fy);              // bottom band
+          sh *= smoothstep(1.0 - uLenY, 1.0 - uLenY - st, fy);  // top band
+        }
+        mask = sh;
+      } else {
+        mask = maskField(uMaskPattern, gl_FragCoord.xy);
       }
-      if(uSideTB > 0.5){
-        sh *= smoothstep(uLenY, uLenY + st, fy);              // bottom band
-        sh *= smoothstep(1.0 - uLenY, 1.0 - uLenY - st, fy);  // top band
-      }
-      col *= sh;
+      col *= mask;
 
       // center dark rectangle that contains the button (foil still shows above/below + at sides)
-      float stepPx = uRes.y * st;
+      float bStepPx = max(uRes.y * uBtnShade, 0.5);
       vec2  cpb    = abs(gl_FragCoord.xy - uBtnPx);
-      vec2  dh     = uBtnSize * 0.5 + stepPx;              // dark rect half-size (button + margin)
+      vec2  dh     = uBtnSize * 0.5 + uRes.y * uBtnMargin + bStepPx; // dark rect half-size (button + margin + transition)
       float outb   = max(cpb.x - dh.x, cpb.y - dh.y);      // < 0 inside the rectangle
-      float dcen   = smoothstep(0.0, stepPx, outb);        // 0 inside (dark) -> 1 outside
+      float dcen   = smoothstep(0.0, bStepPx, outb);       // 0 inside (dark) -> 1 outside
       col *= mix(1.0, dcen, uCenterDark);
 
       // ---- center rectangular button: solid black rectangle, ~10 scales, composed hover ----
@@ -647,7 +782,7 @@
     // uniforms
     const U = {};
     ["uRes","uTime","uTex","uScaleBg","uScaleBtn","uOverlapBg","uOverlapBtn","uOverlapXBg","uOverlapXBtn","uSpreadBg","uSpreadBtn","uSatBg","uSatBtn","uPaletteBg","uPaletteBtn",
-     "uMousePx","uMouseAct","uHoverRot","uHoverCol","uHoverSpr","uHoverSat","uHoverInner","uHoverOuter","uHoverCurve","uRotPhase","uColPhase","uHovRotPhase","uHovColPhase","uBtnRotPhase","uBtnColPhase","uLenX","uLenY","uSideLR","uSideTB","uCenterDark","uShadeStep","uEdgeSoft","uSpeedSpread","uSyncAngle","uSquare","uColorMode","uPlateauDeg","uGradSat","uWaveLen","uWaveSpeed","uGradWhiteB","uGradWhiteM","uWhiteGlow","uBtnPx","uBtnSize","uBtnHover","uBtnRot","uBtnCol","uBtnSpr","uBtnSat"]
+     "uMousePx","uMouseAct","uHoverRot","uHoverCol","uHoverSpr","uHoverSat","uHoverInner","uHoverOuter","uHoverCurve","uRotPhase","uColPhase","uHovRotPhase","uHovColPhase","uBtnRotPhase","uBtnColPhase","uLenX","uLenY","uSideLR","uSideTB","uCenterDark","uShadeStep","uMaskPattern","uMaskScale","uMaskSoft","uBtnShade","uBtnMargin","uEdgeSoft","uSpeedSpread","uSyncAngle","uSquare","uColorMode","uPlateauDeg","uGradSat","uWaveLen","uWaveSpeed","uGradWhiteB","uGradWhiteM","uWhiteGlow","uBlueLevel","uCd2Palette","uBtnPx","uBtnSize","uBtnHover","uBtnRot","uBtnCol","uBtnSpr","uBtnSat"]
       .forEach(n => U[n] = gl.getUniformLocation(prog, n));
 
     // textures: one per profile segment (cd = 1-channel, cd2 = 2-channel)
@@ -677,8 +812,9 @@
     const state = {
       paused: false,
       lenX: 0.255, lenY: 0.08, sideLR: true, sideTB: false, square: false,
-      centerDark: 1.0, shadeStep: 0.06, edgeSoft: 3.0, speedSpread: 2.0, randomSpin: 0, plateauDeg: 15, gradSat: 0, waveLen: 0.8, waveSpeed: 0.06, gradWhiteB: 1, gradWhiteM: 1, whiteGlow: 0, bloom: 0, syncAngle: 0,
-      btnSize: 260, btnRot: 1.12, btnCol: 0.63, btnSpr: 1.00, btnSat: 0.21,
+      maskPattern: 8, maskScale: 0.25, maskSoft: 0.04, cd2Palette: 0,
+      centerDark: 1.0, shadeStep: 0.06, edgeSoft: 1.7, speedSpread: 2.0, randomSpin: 0, plateauDeg: 15, gradSat: 0, waveLen: 0.8, waveSpeed: 0.06, gradWhiteB: 1, gradWhiteM: 1, whiteGlow: 0, bloom: 0, bloomOn: true, blueLevel: 1, syncAngle: 0,
+      btnSize: 260, btnShade: 0.06, btnMargin: 0.025, btnRot: 1.12, btnCol: 0.63, btnSpr: 1.00, btnSat: 0.21,
       hoverRot: 0.0, hoverCol: 0.0, hoverSpr: 0.0, hoverSat: 0.54,
       hoverInner: 0, hoverOuter: 202, hoverCurve: 0,
       seg: "cd", colorMode: 0,   // active profile's segment + colour mode
@@ -811,12 +947,16 @@
       const lr = document.getElementById("sideLR");
       const tb = document.getElementById("sideTB");
       const sq = document.getElementById("squareGrid");
+      const bo = document.getElementById("bloomOn");
       lr.addEventListener("change", () => state.sideLR = lr.checked);
       tb.addEventListener("change", () => state.sideTB = tb.checked);
       sq.addEventListener("change", () => state.square = sq.checked);
-      state.sideLR = lr.checked; state.sideTB = tb.checked; state.square = sq.checked;
+      bo.addEventListener("change", () => state.bloomOn = bo.checked);
+      state.sideLR = lr.checked; state.sideTB = tb.checked; state.square = sq.checked; state.bloomOn = bo.checked;
     })();
     bind("shadeStep", "shadeStep", "oStep", v => v.toFixed(3));
+    bind("maskScale", "maskScale", "oMaskScale", v => v.toFixed(2));
+    bind("maskSoft", "maskSoft", "oMaskSoft", v => v.toFixed(3));
     bind("edgeSoft", "edgeSoft", "oEdgeSoft", v => v.toFixed(2));
     bind("speedSpread", "speedSpread", "oSpeedSpread", v => v.toFixed(2));
     bind("randomSpin", "randomSpin", "oRandomSpin", v => v.toFixed(2));
@@ -826,12 +966,14 @@
     bind("gradWhiteM", "gradWhiteM", "oGradWhiteM", v => v.toFixed(2));
     bind("whiteGlow", "whiteGlow", "oWhiteGlow", v => v.toFixed(2));
     bind("bloom", "bloom", "oBloom", v => v.toFixed(2));
+    bind("blueLevel", "blueLevel", "oBlueLevel", v => v.toFixed(2));
     bind("waveLen", "waveLen", "oWaveLen", v => v.toFixed(2));
     bind("waveSpeed", "waveSpeed", "oWaveSpeed", v => v.toFixed(3));
     bind("btnRot", "btnRot", "oBtnRot", v => v.toFixed(2));
     bind("btnCol", "btnCol", "oBtnCol", v => v.toFixed(2));
     bind("btnSpr", "btnSpr", "oBtnSpr", v => v.toFixed(2));
     bind("btnSat", "btnSat", "oBtnSat", v => v.toFixed(2));
+    bind("btnMargin", "btnMargin", "oBtnMargin", v => v.toFixed(3));
     bind("hoverRot", "hoverRot", "oHoverRot", v => v.toFixed(2));
     bind("hoverCol", "hoverCol", "oHoverCol", v => v.toFixed(2));
     bind("hoverSpr", "hoverSpr", "oHoverSpr", v => v.toFixed(2));
@@ -839,6 +981,8 @@
     bind("hoverInner", "hoverInner", "oHoverInner");
     bind("hoverOuter", "hoverOuter", "oHoverOuter");
     document.getElementById("hoverCurve").addEventListener("change", e => state.hoverCurve = parseInt(e.target.value,10));
+    document.getElementById("maskPattern").addEventListener("change", e => { state.maskPattern = parseInt(e.target.value,10); updateVisibility(); });
+    document.getElementById("cd2Palette").addEventListener("change", e => state.cd2Palette = parseInt(e.target.value,10));
 
     // button width slider also resizes the DOM button (height keeps aspect)
     const foilBtn = document.getElementById("foilBtn");
@@ -875,8 +1019,11 @@
       cfg.foil = {};
       Object.keys(state.foil).forEach(k => cfg.foil[k] = Object.assign({}, state.foil[k]));
       cfg.hoverCurve = state.hoverCurve;
+      cfg.maskPattern = state.maskPattern;
+      cfg.cd2Palette = state.cd2Palette;
       cfg.sideLR = state.sideLR;
       cfg.square = state.square;
+      cfg.bloomOn = state.bloomOn;
       cfg.sideTB = state.sideTB;
       cfg.btnStyle = state.btnStyle;
       cfg.syncAngle = state.syncAngle;
@@ -896,8 +1043,11 @@
         });
       }
       if(cfg.hoverCurve !== undefined){ state.hoverCurve = cfg.hoverCurve; document.getElementById("hoverCurve").value = String(cfg.hoverCurve); }
+      if(cfg.maskPattern !== undefined){ state.maskPattern = cfg.maskPattern; document.getElementById("maskPattern").value = String(cfg.maskPattern); }
+      if(cfg.cd2Palette !== undefined){ state.cd2Palette = cfg.cd2Palette; document.getElementById("cd2Palette").value = String(cfg.cd2Palette); }
       if(cfg.sideLR !== undefined){ state.sideLR = cfg.sideLR; document.getElementById("sideLR").checked = cfg.sideLR; }
       if(cfg.square !== undefined){ state.square = cfg.square; const sc = document.getElementById("squareGrid"); if(sc) sc.checked = cfg.square; }
+      if(cfg.bloomOn !== undefined){ state.bloomOn = cfg.bloomOn; const bc = document.getElementById("bloomOn"); if(bc) bc.checked = cfg.bloomOn; }
       if(cfg.sideTB !== undefined){ state.sideTB = cfg.sideTB; document.getElementById("sideTB").checked = cfg.sideTB; }
       if(cfg.btnStyle !== undefined){ state.btnStyle = cfg.btnStyle; btnStyleSel.value = cfg.btnStyle; applyBtnStyle(); }
       if(cfg.syncAngle !== undefined){
@@ -921,6 +1071,15 @@
     }
     document.getElementById("resetAll").addEventListener("click", resetAll);
     document.getElementById("copyCfg").addEventListener("click", copyConfig);
+    document.getElementById("copyLink").addEventListener("click", () => {
+      profiles[activeProfile].cfg = getConfig();
+      const s = { v:1, active: activeProfile, p1: profiles[1].cfg, p2: profiles[2].cfg };
+      const url = location.origin + location.pathname + "#cfg=" + btoa(unescape(encodeURIComponent(JSON.stringify(s))));
+      const btn = document.getElementById("copyLink");
+      const done = ok => { btn.textContent = ok ? "Copied!" : "Copy failed"; setTimeout(() => btn.textContent = "Copy link", 1200); };
+      if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(() => done(true)).catch(() => done(false)); }
+      else { const ta = document.createElement("textarea"); ta.value = url; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand("copy"); } catch(e) {} ta.remove(); done(ok); }
+    });
 
     // ---- profiles: each keeps its own segment, colour mode and config snapshot ----
     const profiles = {
@@ -930,9 +1089,9 @@
     let activeProfile = 2;                 // start on CD2 by default
     profiles[1].cfg = getConfig();         // seed profile 1 from current (default) config
     profiles[2].cfg = {                     // CD2 tuned config
-      lenX:0.255, lenY:0.08, centerDark:1, shadeStep:0.06, edgeSoft:3,
-      speedSpread:0, randomSpin:0, plateauDeg:10, gradSat:0.81, waveLen:1.15, waveSpeed:0.375, gradWhiteB:0.23, gradWhiteM:0.08, whiteGlow:1, bloom:1,
-      btnRot:1.12, btnCol:0.63, btnSpr:1, btnSat:0.21,
+      lenX:0.255, lenY:0.08, centerDark:1, shadeStep:0.06, edgeSoft:1.7,
+      speedSpread:0, randomSpin:1, plateauDeg:10, gradSat:0.81, waveLen:1.15, waveSpeed:0.375, gradWhiteB:0.23, gradWhiteM:0.08, whiteGlow:1, bloom:1, bloomOn:false, blueLevel:1,
+      btnRot:1.12, btnCol:0.63, btnSpr:1, btnSat:0.21, btnShade:0.06, btnMargin:0.025,
       hoverRot:0, hoverCol:0, hoverSpr:0, hoverSat:0.54,
       hoverInner:0, hoverOuter:202, btnSize:260,
       foil:{
@@ -945,15 +1104,22 @@
         sat:{override:true,g:1,bg:1,btn:1},
         palette:{override:true,g:3,bg:0,btn:0}
       },
-      hoverCurve:0, sideLR:true, sideTB:false, square:true, btnStyle:"crystal", syncAngle:1
+      hoverCurve:0, maskPattern:5, maskScale:0.25, maskSoft:0.04, cd2Palette:0, sideLR:true, sideTB:false, square:true, btnStyle:"crystal", syncAngle:1
     };
-    // colour-flow-speed / colour-spread sliders are meaningless in the 2-colour CD2 profile
-    function applyProfileVisibility(){
+    // show only the settings relevant to the active profile and mask pattern
+    function updateVisibility(){
       const cd2 = (state.colorMode === 1);
+      const classic = (state.maskPattern === 0);
       FOIL_REGISTRY.forEach(r => {
-        if(r.P.key === "color" || r.P.key === "spread") r.wrap.hidden = cd2;
+        if(r.P.key === "color" || r.P.key === "spread" || r.P.key === "palette") r.wrap.hidden = cd2;
       });
-      ["rowPlateau","rowGradSat","rowGradWhiteB","rowGradWhiteM","rowWhiteGlow","rowBloom","rowWaveLen","rowWaveSpeed"].forEach(id => { const el = document.getElementById(id); if(el) el.hidden = !cd2; });
+      // CD2-only rows
+      ["rowPlateau","rowGradSat","rowGradWhiteB","rowGradWhiteM","rowBlueLevel","rowCd2Palette","rowWhiteGlow","rowBloomOn","rowBloom","rowWaveLen","rowWaveSpeed"].forEach(id => { const el = document.getElementById(id); if(el) el.hidden = !cd2; });
+      // mouse interaction is not used by CD2
+      const ms = document.getElementById("mouseSection"); if(ms) ms.hidden = cd2;
+      // classic bands use side-shadow controls; other patterns use scale/softness
+      ["rowSideShadows","rowLenX","rowLenY","rowShadeStep"].forEach(id => { const el = document.getElementById(id); if(el) el.hidden = !classic; });
+      ["rowMaskScale","rowMaskSoft"].forEach(id => { const el = document.getElementById(id); if(el) el.hidden = classic; });
     }
     function switchProfile(id){
       if(id === activeProfile) return;
@@ -962,24 +1128,34 @@
       const p = profiles[id];
       state.seg = p.seg; state.colorMode = p.colorMode; // swap texture + shader mode
       if(p.cfg) applyConfig(p.cfg);                     // restore this profile's values
-      applyProfileVisibility();
+      updateVisibility();
     }
     const profileSel = document.getElementById("profileSel");
     profileSel.addEventListener("change", () => switchProfile(parseInt(profileSel.value,10)));
-    // start on CD2 by default
-    profileSel.value = "2";
-    state.seg = profiles[2].seg; state.colorMode = profiles[2].colorMode;
-    applyConfig(profiles[2].cfg);
-    applyProfileVisibility();
+    // load a shared setup from the URL (#cfg=...) if present
+    (function loadFromLink(){
+      const m = (location.hash || "").match(/cfg=([^&]+)/);
+      if(!m) return;
+      try {
+        const s = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+        if(s.p1) profiles[1].cfg = s.p1;
+        if(s.p2) profiles[2].cfg = s.p2;
+        if(s.active === 1 || s.active === 2) activeProfile = s.active;
+      } catch(e){ console.warn("Bad config link:", e); }
+    })();
+    // start on the active profile (default CD2, or from link)
+    profileSel.value = String(activeProfile);
+    state.seg = profiles[activeProfile].seg; state.colorMode = profiles[activeProfile].colorMode;
+    applyConfig(profiles[activeProfile].cfg);
+    updateVisibility();
 
     // ---- settings search: highlight + jump to first match, optional filter ----
     (function(){
       const searchBox = document.getElementById("searchBox");
       const searchFilter = document.getElementById("searchFilter");
-      const panelEl = document.getElementById("panel");
       function runSearch(){
         const q = searchBox.value.trim().toLowerCase();
-        const rows = panelEl.querySelectorAll(".row, .fp");
+        const rows = document.querySelectorAll("#panel .row, #panel .fp, #panelLeft .row, #panelLeft .fp");
         let first = null;
         rows.forEach(el => {
           if(el.contains(searchBox)){ el.classList.remove("filtered", "search-hit"); return; }
@@ -997,10 +1173,11 @@
     })();
 
     const panel = document.getElementById("panel");
+    const panelLeft = document.getElementById("panelLeft");
     const toggle = document.getElementById("toggle");
     const pauseBtn = document.getElementById("pause");
-    document.getElementById("hidePanel").addEventListener("click", () => panel.classList.add("hidden"));
-    toggle.addEventListener("click", () => panel.classList.remove("hidden"));
+    document.getElementById("hidePanel").addEventListener("click", () => { panel.classList.add("hidden"); panelLeft.classList.add("hidden"); });
+    toggle.addEventListener("click", () => { panel.classList.remove("hidden"); panelLeft.classList.remove("hidden"); });
     pauseBtn.addEventListener("click", () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "Play" : "Pause"; if(!state.paused) requestAnimationFrame(loop); });
 
     const syncBtn = document.getElementById("syncAngle");
@@ -1013,7 +1190,7 @@
     window.addEventListener("keydown", e => {
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (e.key === "h" || e.key === "H") panel.classList.toggle("hidden");
+      if (e.key === "h" || e.key === "H") { panel.classList.toggle("hidden"); panelLeft.classList.toggle("hidden"); }
       if (e.code === "Space") { e.preventDefault(); pauseBtn.click(); }
     });
     window.addEventListener("mousemove", e => {
@@ -1094,7 +1271,9 @@
       const w = canvas.width, h = canvas.height;
       if(sceneFBO && sceneFBO.w === w && sceneFBO.h === h) return;
       [sceneFBO, blurA, blurB].forEach(f => { if(f){ gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex); } });
-      sceneFBO = makeFBO(w, h); blurA = makeFBO(w, h); blurB = makeFBO(w, h);
+      sceneFBO = makeFBO(w, h);
+      const hw = Math.max(1, w >> 1), hh = Math.max(1, h >> 1);   // bloom runs at half resolution
+      blurA = makeFBO(hw, hh); blurB = makeFBO(hw, hh);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
@@ -1118,10 +1297,33 @@
     let last = start;
     let mpx = -1e4, mpy = -1e4, mouseAct = 0, btnHover = 0;
     let rotPhase = 0, colPhase = 0, hovRotPhase = 0, hovColPhase = 0, btnRotPhase = 0, btnColPhase = 0;
+
+    // ---------- Performance stats ----------
+    const statsEl = document.getElementById("stats");
+    const gpuExt = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+    let gpuQuery = gpuExt ? gl.createQuery() : null;
+    let gpuBusy = false, gpuMs = 0;
+    let statAccum = 0, statFrames = 0, statLast = start;
+    let statMax = 0, curPasses = 1, cpuMs = 0;
+    function updateStats(now){
+      statAccum += cpuMs; statFrames++;
+      if(cpuMs > statMax) statMax = cpuMs;
+      if(now - statLast >= 250){
+        const avg = statAccum / statFrames;
+        const fps = 1000 / avg;
+        const gpuLine = gpuExt ? ("GPU  " + (gpuMs > 0 ? gpuMs.toFixed(2) + " ms" : "…")) : "GPU  n/a";
+        statsEl.textContent =
+          "FPS  " + fps.toFixed(0) + "   (" + avg.toFixed(2) + " ms)\n" +
+          "peak " + statMax.toFixed(2) + " ms\n" +
+          gpuLine + "\n" +
+          "pass " + curPasses + "   " + canvas.width + "×" + canvas.height + " @" + dpr + "x";
+        statAccum = 0; statFrames = 0; statMax = 0; statLast = now;
+      }
+    }
     function loop() {
       const now = performance.now();
       const t = (now - start) / 1000;
-      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const dt = Math.min(0.05, (now - last) / 1000); cpuMs = now - last; last = now;
       // smooth cursor position for hover radius
       mpx += (state.mpxT - mpx) * 0.25;
       mpy += (state.mpyT - mpy) * 0.25;
@@ -1164,6 +1366,8 @@
       gl.uniform1f(U.uGradWhiteB, state.gradWhiteB);
       gl.uniform1f(U.uGradWhiteM, state.gradWhiteM);
       gl.uniform1f(U.uWhiteGlow, state.whiteGlow);
+      gl.uniform1f(U.uBlueLevel, state.blueLevel);
+      gl.uniform1i(U.uCd2Palette, state.cd2Palette | 0);
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform1f(U.uTime, t);
       gl.uniform1f(U.uScaleBg,   eff("scale","bg")  * dpr);
@@ -1199,6 +1403,11 @@
       gl.uniform1f(U.uSideTB, state.sideTB ? 1 : 0);
       gl.uniform1f(U.uCenterDark, state.centerDark);
       gl.uniform1f(U.uShadeStep, state.shadeStep);
+      gl.uniform1i(U.uMaskPattern, state.maskPattern | 0);
+      gl.uniform1f(U.uMaskScale, state.maskScale);
+      gl.uniform1f(U.uMaskSoft, state.maskSoft);
+      gl.uniform1f(U.uBtnShade, state.maskPattern === 0 ? state.shadeStep : state.maskSoft * state.maskScale);
+      gl.uniform1f(U.uBtnMargin, state.btnMargin);
       gl.uniform1f(U.uEdgeSoft, state.edgeSoft);
       gl.uniform1f(U.uSpeedSpread, state.speedSpread);
       gl.uniform1f(U.uSquare, state.square ? 1 : 0);
@@ -1212,25 +1421,40 @@
       gl.uniform1f(U.uBtnSpr, state.btnSpr);
       gl.uniform1f(U.uBtnSat, state.btnSat);
 
-      const useBloom = bloomOK && state.bloom > 0.001 && state.whiteGlow > 0.001 && state.gradSat > 0.001;
+      const useBloom = bloomOK && state.bloomOn && state.bloom > 0.001 && state.whiteGlow > 0.001 && state.gradSat > 0.001;
+      curPasses = useBloom ? 4 : 1;
+
+      // GPU timing: poll the previous query, then time this frame's draws if free
+      if(gpuExt && gpuBusy){
+        const disjoint = gl.getParameter(gpuExt.GPU_DISJOINT_EXT);
+        if(disjoint){ gpuBusy = false; }
+        else if(gl.getQueryParameter(gpuQuery, gl.QUERY_RESULT_AVAILABLE)){
+          gpuMs = gl.getQueryParameter(gpuQuery, gl.QUERY_RESULT) / 1e6; gpuBusy = false;
+        }
+      }
+      const timeGpu = gpuExt && !gpuBusy;
+      if(timeGpu) gl.beginQuery(gpuExt.TIME_ELAPSED_EXT, gpuQuery);
       if(useBloom){
         const W = canvas.width, H = canvas.height;
         // 1) scene (with HDR glow) -> sceneFBO
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fbo);
         gl.viewport(0, 0, W, H);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        // 2) extract (>1) + horizontal blur -> blurA
+        // 2) extract (>1) + horizontal blur -> blurA (half res)
         gl.useProgram(blurProg);
         gl.bindFramebuffer(gl.FRAMEBUFFER, blurA.fbo);
+        gl.viewport(0, 0, blurA.w, blurA.h);
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex); gl.uniform1i(BU.uSrc, 0);
-        gl.uniform2f(BU.uTexel, 1.0 / W, 1.0 / H);
+        gl.uniform2f(BU.uTexel, 1.0 / blurA.w, 1.0 / blurA.h);
         gl.uniform2f(BU.uDir, 1.0, 0.0);
         gl.uniform1f(BU.uExtract, 1.0);
-        gl.uniform1f(BU.uRadius, 3.0 * dpr);
+        gl.uniform1f(BU.uRadius, 1.5 * dpr);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        // 3) vertical blur -> blurB
+        // 3) vertical blur -> blurB (half res)
         gl.bindFramebuffer(gl.FRAMEBUFFER, blurB.fbo);
+        gl.viewport(0, 0, blurB.w, blurB.h);
         gl.bindTexture(gl.TEXTURE_2D, blurA.tex); gl.uniform1i(BU.uSrc, 0);
+        gl.uniform2f(BU.uTexel, 1.0 / blurB.w, 1.0 / blurB.h);
         gl.uniform2f(BU.uDir, 0.0, 1.0);
         gl.uniform1f(BU.uExtract, 0.0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -1249,9 +1473,15 @@
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
+      if(timeGpu){ gl.endQuery(gpuExt.TIME_ELAPSED_EXT); gpuBusy = true; }
 
-      if (!state.paused) requestAnimationFrame(loop);
+      updateStats(now);
+
+      if (!state.paused && !document.hidden) requestAnimationFrame(loop);
     }
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && !state.paused) { last = performance.now(); requestAnimationFrame(loop); }
+    });
     requestAnimationFrame(loop);
   })();
   </script>
