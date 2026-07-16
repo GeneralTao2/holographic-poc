@@ -1043,6 +1043,29 @@
       state.btnStyle = "crystal"; btnStyleSel.value = "crystal"; applyBtnStyle();
     }
     // ---- config snapshot / restore (used by profiles + copy) ----
+    // diff/merge helpers so a shared link only carries the fields a user changed
+    function isPlainObj(o){ return o && typeof o === "object" && !Array.isArray(o); }
+    function diffConfig(cur, base){
+      const out = {};
+      Object.keys(cur).forEach(k => {
+        const c = cur[k], b = base ? base[k] : undefined;
+        if(isPlainObj(c) && isPlainObj(b)){
+          const d = diffConfig(c, b);
+          if(Object.keys(d).length) out[k] = d;
+        } else if(c !== b){
+          out[k] = c;
+        }
+      });
+      return out;
+    }
+    function mergeConfig(base, diff){
+      const out = {};
+      if(isPlainObj(base)) Object.keys(base).forEach(k => out[k] = isPlainObj(base[k]) ? mergeConfig(base[k], {}) : base[k]);
+      if(isPlainObj(diff)) Object.keys(diff).forEach(k => {
+        out[k] = (isPlainObj(diff[k]) && isPlainObj(out[k])) ? mergeConfig(out[k], diff[k]) : diff[k];
+      });
+      return out;
+    }
     function getConfig(){
       const cfg = {};
       REGISTRY.forEach(r => cfg[r.key] = state[r.key]);
@@ -1103,7 +1126,11 @@
     document.getElementById("copyCfg").addEventListener("click", copyConfig);
     document.getElementById("copyLink").addEventListener("click", () => {
       profiles[activeProfile].cfg = getConfig();
-      const s = { v:1, active: activeProfile, p1: profiles[1].cfg, p2: profiles[2].cfg };
+      const s = { v:2, active: activeProfile };
+      const d1 = diffConfig(profiles[1].cfg, BASE[1]);
+      const d2 = diffConfig(profiles[2].cfg, BASE[2]);
+      if(Object.keys(d1).length) s.p1 = d1;
+      if(Object.keys(d2).length) s.p2 = d2;
       const url = location.origin + location.pathname + "#cfg=" + btoa(unescape(encodeURIComponent(JSON.stringify(s))));
       const btn = document.getElementById("copyLink");
       const done = ok => { btn.textContent = ok ? "Copied!" : "Copy failed"; setTimeout(() => btn.textContent = "Copy link", 1200); };
@@ -1136,6 +1163,13 @@
       },
       hoverCurve:0, maskPattern:5, maskScale:0.25, maskSoft:0.04, cd2Palette:0, sideLR:true, sideTB:false, square:true, btnStyle:"crystal", syncAngle:1
     };
+    // capture normalized baselines (defaults round-tripped through the controls, so
+    // slider step-snapping is accounted for) — shared links diff against these
+    const BASE = {};
+    applyConfig(profiles[1].cfg); BASE[1] = getConfig();
+    applyConfig(profiles[2].cfg); BASE[2] = getConfig();
+    profiles[1].cfg = BASE[1];
+    profiles[2].cfg = BASE[2];
     // show only the settings relevant to the active profile and mask pattern
     function updateVisibility(){
       const cd2 = (state.colorMode === 1);
@@ -1168,8 +1202,15 @@
       if(!m) return;
       try {
         const s = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-        if(s.p1) profiles[1].cfg = s.p1;
-        if(s.p2) profiles[2].cfg = s.p2;
+        if(s.v === 2){
+          // minimal link: only changed fields, merged onto each profile's baseline
+          if(s.p1) profiles[1].cfg = mergeConfig(BASE[1], s.p1);
+          if(s.p2) profiles[2].cfg = mergeConfig(BASE[2], s.p2);
+        } else {
+          // legacy link: full config for each profile
+          if(s.p1) profiles[1].cfg = s.p1;
+          if(s.p2) profiles[2].cfg = s.p2;
+        }
         if(s.active === 1 || s.active === 2) activeProfile = s.active;
       } catch(e){ console.warn("Bad config link:", e); }
     })();
